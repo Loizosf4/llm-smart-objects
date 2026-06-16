@@ -23,7 +23,12 @@ test("API repairs invalid first LLM output once", async () => {
         {
           id: "poster_01",
           type: "poster",
-          advertisements: [{ need: "unknown", weight: 0.5 }]
+          interactions: [
+            {
+              id: "look_at_poster",
+              advertisements: [{ need: "unknown", weight: 0.5 }]
+            }
+          ]
         }
       ]
     }),
@@ -33,7 +38,12 @@ test("API repairs invalid first LLM output once", async () => {
         {
           id: "water_dispenser_01",
           type: "water_dispenser",
-          advertisements: [{ need: "thirst", weight: 0.9 }]
+          interactions: [
+            {
+              id: "drink_water",
+              advertisements: [{ need: "thirst", weight: 0.9 }]
+            }
+          ]
         }
       ]
     })
@@ -62,11 +72,13 @@ test("API repairs invalid first LLM output once", async () => {
     assert.equal(response.status, 200);
     assert.equal(payload.success, true);
     assert.equal(payload.data.objects[0].type, "water_dispenser");
+    assert.equal(payload.data.objects[0].interactions[0].id, "drink_water");
     assert.equal(requests.length, 2);
     assert.match(requests[0].prompt, /Generate a concise set/);
     assert.match(requests[1].prompt, /Correct the invalid/);
     assert.deepEqual(
-      requests[0].responseSchema.properties.objects.items.properties.advertisements.items.properties.need.enum,
+      requests[0].responseSchema.properties.objects.items.properties.interactions.items
+        .properties.advertisements.items.properties.need.enum,
       ["thirst"]
     );
   } finally {

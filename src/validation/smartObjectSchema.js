@@ -13,7 +13,7 @@ export const smartObjectSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "type", "advertisements"],
+        required: ["id", "type", "interactions"],
         properties: {
           id: {
             type: "string",
@@ -23,22 +23,37 @@ export const smartObjectSchema = {
             type: "string",
             minLength: 1
           },
-          advertisements: {
+          interactions: {
             type: "array",
             minItems: 1,
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["need", "weight"],
+              required: ["id", "advertisements"],
               properties: {
-                need: {
+                id: {
                   type: "string",
-                  minLength: 1
+                  pattern: "^[a-z][a-z0-9_]*$"
                 },
-                weight: {
-                  type: "number",
-                  minimum: 0,
-                  maximum: 1
+                advertisements: {
+                  type: "array",
+                  minItems: 1,
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["need", "weight"],
+                    properties: {
+                      need: {
+                        type: "string",
+                        minLength: 1
+                      },
+                      weight: {
+                        type: "number",
+                        minimum: 0,
+                        maximum: 1
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -73,15 +88,24 @@ export function buildSmartObjectResponseSchema(needs) {
           ...smartObjectSchema.properties.objects.items,
           properties: {
             ...smartObjectSchema.properties.objects.items.properties,
-            advertisements: {
-              ...smartObjectSchema.properties.objects.items.properties.advertisements,
+            interactions: {
+              ...smartObjectSchema.properties.objects.items.properties.interactions,
               items: {
-                ...smartObjectSchema.properties.objects.items.properties.advertisements.items,
+                ...smartObjectSchema.properties.objects.items.properties.interactions.items,
                 properties: {
-                  ...smartObjectSchema.properties.objects.items.properties.advertisements.items.properties,
-                  need: {
-                    type: "string",
-                    enum: allowedNeedNames
+                  ...smartObjectSchema.properties.objects.items.properties.interactions.items.properties,
+                  advertisements: {
+                    ...smartObjectSchema.properties.objects.items.properties.interactions.items.properties.advertisements,
+                    items: {
+                      ...smartObjectSchema.properties.objects.items.properties.interactions.items.properties.advertisements.items,
+                      properties: {
+                        ...smartObjectSchema.properties.objects.items.properties.interactions.items.properties.advertisements.items.properties,
+                        need: {
+                          type: "string",
+                          enum: allowedNeedNames
+                        }
+                      }
+                    }
                   }
                 }
               }

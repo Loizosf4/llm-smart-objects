@@ -41,7 +41,7 @@ test("Gemini request uses API key header and keeps key out of URL", async (t) =>
         candidates: [
           {
             content: {
-              parts: [{ text: "{\"location\":\"break room\",\"objects\":[]}" }]
+              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"interactions\":[{\"id\":\"sit_and_relax\",\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
             }
           }
         ]
@@ -70,7 +70,7 @@ test("Gemini request contains structured output config with need enum", async (t
         candidates: [
           {
             content: {
-              parts: [{ text: "{\"location\":\"break room\",\"objects\":[]}" }]
+              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"interactions\":[{\"id\":\"sit_and_relax\",\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
             }
           }
         ]
@@ -86,7 +86,8 @@ test("Gemini request contains structured output config with need enum", async (t
   assert.equal("responseFormat" in capturedBody.generationConfig, false);
   assert.deepEqual(
     capturedBody.generationConfig.responseJsonSchema
-      .properties.objects.items.properties.advertisements.items.properties.need.enum,
+      .properties.objects.items.properties.interactions.items
+      .properties.advertisements.items.properties.need.enum,
     ["rest", "comfort", "entertainment"]
   );
 });

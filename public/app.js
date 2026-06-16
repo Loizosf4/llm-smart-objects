@@ -111,10 +111,14 @@ function validateClientInput(locationDescription, needs) {
   return "";
 }
 
-function showJson(data) {
+function isCurrentInteractionOutput(data) {
+  return Boolean(data?.objects?.every((object) => Array.isArray(object.interactions)));
+}
+
+function showJson(data, validationMessage = "Schema validation passed.") {
   currentJson = JSON.stringify(data, null, 2);
   jsonViewer.textContent = currentJson;
-  validationState.textContent = "Schema validation passed.";
+  validationState.textContent = validationMessage;
   copyButton.disabled = false;
   downloadButton.disabled = false;
   clearButton.disabled = false;
@@ -174,8 +178,14 @@ function renderHistory() {
     openButton.addEventListener("click", () => {
       locationInput.value = item.locationDescription;
       needsList.textContent = "";
-      item.needs.forEach(renderNeedRow);
-      showJson(item.generatedJson);
+      if (Array.isArray(item.needs)) {
+        item.needs.forEach(renderNeedRow);
+      }
+      if (isCurrentInteractionOutput(item.generatedJson)) {
+        showJson(item.generatedJson);
+      } else {
+        showJson(item.generatedJson, "Loaded historical JSON from an older schema; not validated against the current interaction schema.");
+      }
       setError("");
       setStatus("Loaded a previous successful generation.");
     });
@@ -260,7 +270,7 @@ downloadButton.addEventListener("click", () => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "smart-objects.json";
+  link.download = "smart-objects-with-interactions.json";
   link.click();
   URL.revokeObjectURL(url);
 });
