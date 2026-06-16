@@ -8,16 +8,20 @@ const needs = [
   { name: "thirst", definition: "The need to drink." }
 ];
 
+function interaction(overrides = {}) {
+  return {
+    id: "sit_and_relax",
+    duration: { type: "continuous" },
+    advertisements: [{ need: "rest", weight: 0.6 }],
+    ...overrides
+  };
+}
+
 function object(overrides = {}) {
   return {
     id: "sofa_01",
     type: "sofa",
-    interactions: [
-      {
-        id: "sit_and_relax",
-        advertisements: [{ need: "rest", weight: 0.6 }]
-      }
-    ],
+    interactions: [interaction()],
     ...overrides
   };
 }
@@ -30,9 +34,178 @@ function output(overrides = {}) {
   });
 }
 
-test("valid interaction-based output passes", () => {
+test("valid continuous duration passes", () => {
   const result = validateSmartObjectOutput(output(), needs);
   assert.equal(result.valid, true);
+});
+
+test("valid instant duration passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({
+            id: "turn_on_light",
+            duration: { type: "instant" }
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("valid fixed duration with seconds passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({
+            id: "drink_water",
+            duration: { type: "fixed", seconds: 30 },
+            advertisements: [{ need: "thirst", weight: 0.8 }]
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("missing duration fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          {
+            id: "sit_and_relax",
+            advertisements: [{ need: "rest", weight: 0.5 }]
+          }
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+});
+
+test("unknown duration type fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ duration: { type: "brief" } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+});
+
+test("fixed duration without seconds fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ id: "drink_water", duration: { type: "fixed" } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /requires seconds/);
+});
+
+test("fixed duration with zero seconds fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ id: "drink_water", duration: { type: "fixed", seconds: 0 } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+});
+
+test("fixed duration with negative seconds fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ id: "drink_water", duration: { type: "fixed", seconds: -1 } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+});
+
+test("fixed duration above 86400 fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ id: "sleep", duration: { type: "fixed", seconds: 86401 } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+});
+
+test("fixed duration with non-numeric seconds fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ id: "drink_water", duration: { type: "fixed", seconds: "30" } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+});
+
+test("instant duration containing seconds fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ id: "turn_on_light", duration: { type: "instant", seconds: 1 } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must not contain seconds/);
+});
+
+test("continuous duration containing seconds fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ duration: { type: "continuous", seconds: 600 } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must not contain seconds/);
+});
+
+test("extra field inside duration fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ duration: { type: "continuous", scale: "minutes" } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
 });
 
 test("object-level advertisements fail", () => {
@@ -71,6 +244,7 @@ test("missing interaction ID fails", () => {
       object({
         interactions: [
           {
+            duration: { type: "continuous" },
             advertisements: [{ need: "rest", weight: 0.5 }]
           }
         ]
@@ -85,10 +259,7 @@ test("invalid interaction ID format fails", () => {
     objects: [
       object({
         interactions: [
-          {
-            id: "Sit And Relax",
-            advertisements: [{ need: "rest", weight: 0.5 }]
-          }
+          interaction({ id: "Sit And Relax" })
         ]
       })
     ]
@@ -101,14 +272,8 @@ test("duplicate interaction IDs within one object fail", () => {
     objects: [
       object({
         interactions: [
-          {
-            id: "sit_and_relax",
-            advertisements: [{ need: "rest", weight: 0.6 }]
-          },
-          {
-            id: "sit_and_relax",
-            advertisements: [{ need: "rest", weight: 0.4 }]
-          }
+          interaction(),
+          interaction({ advertisements: [{ need: "rest", weight: 0.4 }] })
         ]
       })
     ]
@@ -125,10 +290,7 @@ test("same interaction ID on different objects is allowed", () => {
         id: "armchair_01",
         type: "armchair",
         interactions: [
-          {
-            id: "sit_and_relax",
-            advertisements: [{ need: "rest", weight: 0.5 }]
-          }
+          interaction({ advertisements: [{ need: "rest", weight: 0.5 }] })
         ]
       }
     ]
@@ -140,7 +302,12 @@ test("missing interaction advertisements fail", () => {
   const result = validateSmartObjectOutput(output({
     objects: [
       object({
-        interactions: [{ id: "sit_and_relax" }]
+        interactions: [
+          {
+            id: "sit_and_relax",
+            duration: { type: "continuous" }
+          }
+        ]
       })
     ]
   }), needs);
@@ -152,10 +319,11 @@ test("unknown need inside an interaction fails", () => {
     objects: [
       object({
         interactions: [
-          {
+          interaction({
             id: "wash_hands",
+            duration: { type: "fixed", seconds: 30 },
             advertisements: [{ need: "hygiene", weight: 0.8 }]
-          }
+          })
         ]
       })
     ]
@@ -169,13 +337,12 @@ test("duplicate need advertisement within one interaction fails", () => {
     objects: [
       object({
         interactions: [
-          {
-            id: "sit_and_relax",
+          interaction({
             advertisements: [
               { need: "rest", weight: 0.6 },
               { need: "rest", weight: 0.4 }
             ]
-          }
+          })
         ]
       })
     ]
@@ -189,10 +356,11 @@ test("weight below 0.0 fails", () => {
     objects: [
       object({
         interactions: [
-          {
+          interaction({
             id: "drink_water",
+            duration: { type: "fixed", seconds: 20 },
             advertisements: [{ need: "thirst", weight: -0.1 }]
-          }
+          })
         ]
       })
     ]
@@ -205,10 +373,11 @@ test("weight above 1.0 fails", () => {
     objects: [
       object({
         interactions: [
-          {
+          interaction({
             id: "drink_water",
+            duration: { type: "fixed", seconds: 20 },
             advertisements: [{ need: "thirst", weight: 1.1 }]
-          }
+          })
         ]
       })
     ]
@@ -232,11 +401,7 @@ test("extra fields on an interaction fail", () => {
     objects: [
       object({
         interactions: [
-          {
-            id: "sit_and_relax",
-            duration: 30,
-            advertisements: [{ need: "rest", weight: 0.6 }]
-          }
+          interaction({ availability: "always" })
         ]
       })
     ]

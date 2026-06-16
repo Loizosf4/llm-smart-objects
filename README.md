@@ -1,17 +1,18 @@
 # LLM Smart Object Generator
 
-An experimental environment-first generator for manually inspecting smart-object JSON. This version tests whether an LLM can generate sensible interactions for environmental objects and correctly associate those interactions with predefined NPC needs and relative advertisement weights.
+An experimental environment-first generator for manually inspecting smart-object JSON. Version 2 tests whether an LLM can classify environmental interactions by duration type and provide sensible approximate durations for interactions that have a fixed completion time.
 
 The generated structure is:
 
 ```text
 Object
 -> Interactions
--> Advertised needs
--> Weights
+   -> Duration
+   -> Advertised needs
+   -> Weights
 ```
 
-This version deliberately generates only objects, interactions, advertisements, and weights. It does not include a simulator, availability, capacity, time, object state, animation, Behavior Trees, action sequences, utility-system generation, NPC roles, NPC personalities, or advanced smart-object logic.
+This version deliberately generates only objects, interactions, duration information, advertisements, and weights. It does not include simulator execution, availability, capacity, occupancy, reservations, object state, animation, Behavior Trees, interruption logic, utility-system generation, NPC roles, NPC personalities, or advanced smart-object logic.
 
 ## Installation
 
@@ -98,6 +99,9 @@ Successful response:
         "interactions": [
           {
             "id": "sit_and_relax",
+            "duration": {
+              "type": "continuous"
+            },
             "advertisements": [
               {
                 "need": "rest",
@@ -106,6 +110,25 @@ Successful response:
               {
                 "need": "comfort",
                 "weight": 0.7
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "coffee_machine_01",
+        "type": "coffee_machine",
+        "interactions": [
+          {
+            "id": "get_and_drink_coffee",
+            "duration": {
+              "type": "fixed",
+              "seconds": 45
+            },
+            "advertisements": [
+              {
+                "need": "thirst",
+                "weight": 0.4
               }
             ]
           }
@@ -125,7 +148,7 @@ Failure response:
 }
 ```
 
-Generated JSON is schema-validated. Unknown fields, object-level advertisements, unsupported need names, duplicate object IDs, duplicate interaction IDs within one object, duplicate advertisements within one interaction, malformed JSON, empty interaction lists, empty advertisement lists, invalid interaction IDs, and out-of-range weights are rejected. The server asks the LLM for one focused repair attempt before returning a validation failure.
+Generated JSON is schema-validated. Unknown fields, object-level advertisements, unsupported need names, duplicate object IDs, duplicate interaction IDs within one object, duplicate advertisements within one interaction, malformed JSON, empty interaction lists, empty advertisement lists, missing duration, invalid duration types, invalid fixed seconds, seconds on instant or continuous durations, invalid interaction IDs, and out-of-range weights are rejected. The server asks the LLM for one focused repair attempt before returning a validation failure.
 
 ## Objects And Interactions
 
@@ -141,6 +164,39 @@ An interaction describes one complete way an NPC can use that object. Interactio
 - `get_and_eat_food`
 
 Interactions should be complete need-satisfying abstractions. Prefer `get_and_drink_coffee` over `press_button`, `get_and_eat_food` over `open_door`, and `read_a_book` over `take_book`.
+
+## Duration Types
+
+Every interaction has exactly one `duration` object.
+
+Use `instant` when the interaction completes almost immediately and does not meaningfully occupy the NPC over simulation time:
+
+```json
+{
+  "type": "instant"
+}
+```
+
+Use `fixed` when the interaction has a natural completion point and an approximately predictable duration:
+
+```json
+{
+  "type": "fixed",
+  "seconds": 30
+}
+```
+
+Fixed interactions require `seconds`. `seconds` are approximate real-world seconds, must be greater than `0`, and must be no greater than `86400`.
+
+Use `continuous` when there is no predetermined completion time:
+
+```json
+{
+  "type": "continuous"
+}
+```
+
+Continuous does not mean infinite. It means the smart object does not define a fixed stopping time; future NPC or utility-system logic may decide when to stop. Instant and continuous durations must not include `seconds`.
 
 ## Advertisement And Weight Meaning
 
@@ -161,6 +217,6 @@ Weights of `0.0` are valid by schema but should not normally be generated. If an
 
 - Gemini is the only live LLM provider in this version.
 - The app stores optional recent successful generations only in browser `localStorage`.
-- Older browser history entries may display as historical JSON, but they are not treated as validated against the current interaction schema.
+- Older browser history entries may display as historical JSON, but they are not treated as validated against the current duration schema.
 - Validation rejects invalid generated content but does not semantically rewrite it in application code.
-- There is no database, simulator, availability, capacity, time, state, animation, Behavior Trees, utility-system generation, NPC execution model, or advanced smart-object logic.
+- There is no database, simulator execution, availability, capacity, occupancy, reservations, state, animation, Behavior Trees, interruption logic, utility-system generation, NPC execution model, or advanced smart-object logic.

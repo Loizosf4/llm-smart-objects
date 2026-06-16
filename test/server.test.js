@@ -26,7 +26,8 @@ test("API repairs invalid first LLM output once", async () => {
           interactions: [
             {
               id: "look_at_poster",
-              advertisements: [{ need: "unknown", weight: 0.5 }]
+              duration: { type: "fixed" },
+              advertisements: [{ need: "thirst", weight: 0.5 }]
             }
           ]
         }
@@ -41,6 +42,7 @@ test("API repairs invalid first LLM output once", async () => {
           interactions: [
             {
               id: "drink_water",
+              duration: { type: "fixed", seconds: 20 },
               advertisements: [{ need: "thirst", weight: 0.9 }]
             }
           ]
@@ -73,6 +75,7 @@ test("API repairs invalid first LLM output once", async () => {
     assert.equal(payload.success, true);
     assert.equal(payload.data.objects[0].type, "water_dispenser");
     assert.equal(payload.data.objects[0].interactions[0].id, "drink_water");
+    assert.deepEqual(payload.data.objects[0].interactions[0].duration, { type: "fixed", seconds: 20 });
     assert.equal(requests.length, 2);
     assert.match(requests[0].prompt, /Generate a concise set/);
     assert.match(requests[1].prompt, /Correct the invalid/);
@@ -80,6 +83,11 @@ test("API repairs invalid first LLM output once", async () => {
       requests[0].responseSchema.properties.objects.items.properties.interactions.items
         .properties.advertisements.items.properties.need.enum,
       ["thirst"]
+    );
+    assert.equal(
+      requests[0].responseSchema.properties.objects.items.properties.interactions.items
+        .properties.duration.properties.type.enum.includes("fixed"),
+      true
     );
   } finally {
     await close(server);

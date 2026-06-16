@@ -29,11 +29,27 @@ export const smartObjectSchema = {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["id", "advertisements"],
+              required: ["id", "duration", "advertisements"],
               properties: {
                 id: {
                   type: "string",
                   pattern: "^[a-z][a-z0-9_]*$"
+                },
+                duration: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["type"],
+                  properties: {
+                    type: {
+                      type: "string",
+                      enum: ["instant", "fixed", "continuous"]
+                    },
+                    seconds: {
+                      type: "number",
+                      minimum: 0,
+                      maximum: 86400
+                    }
+                  }
                 },
                 advertisements: {
                   type: "array",
