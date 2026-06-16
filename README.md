@@ -6,6 +6,8 @@ This version deliberately generates only objects, advertisements, and weights. I
 
 ## Installation
 
+Requires Node.js 18 or newer because the backend uses the built-in `fetch` API.
+
 ```bash
 npm install
 ```
@@ -16,11 +18,12 @@ Create a local `.env` file from `.env.example`:
 
 ```text
 GEMINI_API_KEY=
-GEMINI_MODEL=
+GEMINI_MODEL=gemini-2.5-flash
+GEMINI_TIMEOUT_MS=60000
 PORT=3000
 ```
 
-`GEMINI_API_KEY` and `GEMINI_MODEL` are required for live generation. The API key is used only by the Express backend and is never sent to browser code.
+`GEMINI_API_KEY` and `GEMINI_MODEL` are required for live generation. `GEMINI_TIMEOUT_MS` controls the Gemini request timeout and defaults to 60000 when omitted or invalid. The API key is sent only from the Express backend using the `x-goog-api-key` header and is never sent to browser code.
 
 ## Running
 

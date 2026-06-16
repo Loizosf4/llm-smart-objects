@@ -15,6 +15,7 @@ function close(server) {
 }
 
 test("API repairs invalid first LLM output once", async () => {
+  const requests = [];
   const calls = [
     JSON.stringify({
       location: "break room",
@@ -39,7 +40,10 @@ test("API repairs invalid first LLM output once", async () => {
   ];
 
   const app = createApp({
-    llmClient: async () => calls.shift()
+    llmClient: async (request) => {
+      requests.push(request);
+      return calls.shift();
+    }
   });
   const server = await listen(app);
 
@@ -58,6 +62,13 @@ test("API repairs invalid first LLM output once", async () => {
     assert.equal(response.status, 200);
     assert.equal(payload.success, true);
     assert.equal(payload.data.objects[0].type, "water_dispenser");
+    assert.equal(requests.length, 2);
+    assert.match(requests[0].prompt, /Generate a concise set/);
+    assert.match(requests[1].prompt, /Correct the invalid/);
+    assert.deepEqual(
+      requests[0].responseSchema.properties.objects.items.properties.advertisements.items.properties.need.enum,
+      ["thirst"]
+    );
   } finally {
     await close(server);
   }

@@ -1,10 +1,12 @@
-import { smartObjectSchemaForPrompt } from "../validation/smartObjectSchema.js";
+import { buildSmartObjectResponseSchema } from "../validation/smartObjectSchema.js";
 
 function formatNeeds(needs) {
   return needs.map((need) => `- ${need.name}: ${need.definition}`).join("\n");
 }
 
 export function buildSmartObjectPrompt({ locationDescription, needs }) {
+  const responseSchema = buildSmartObjectResponseSchema(needs);
+
   return [
     "You generate JSON for an experimental LLM Smart Object Generator.",
     "",
@@ -43,13 +45,15 @@ export function buildSmartObjectPrompt({ locationDescription, needs }) {
     "12. Do not generate capacity, timing, availability, occupancy, reservations, state, behavior, animation, actions, utility curves, NPC roles, personalities, Behavior Trees, or interaction logic.",
     "",
     "Required JSON schema:",
-    JSON.stringify(smartObjectSchemaForPrompt, null, 2),
+    JSON.stringify(responseSchema, null, 2),
     "",
     "Return raw JSON only. Do not include Markdown, code fences, comments, or explanations."
   ].join("\n");
 }
 
 export function buildSmartObjectRepairPrompt({ invalidOutput, validationErrors, locationDescription, needs }) {
+  const responseSchema = buildSmartObjectResponseSchema(needs);
+
   return [
     "Correct the invalid smart-object JSON output.",
     "Return corrected raw JSON only. Do not include Markdown, code fences, comments, or explanations.",
@@ -63,7 +67,7 @@ export function buildSmartObjectRepairPrompt({ invalidOutput, validationErrors, 
     validationErrors.map((error) => `- ${error}`).join("\n"),
     "",
     "Required JSON schema:",
-    JSON.stringify(smartObjectSchemaForPrompt, null, 2),
+    JSON.stringify(responseSchema, null, 2),
     "",
     "Invalid output to repair:",
     invalidOutput

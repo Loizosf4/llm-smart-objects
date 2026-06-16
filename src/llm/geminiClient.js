@@ -1,8 +1,32 @@
 const DEFAULT_TEMPERATURE = 0.35;
+const DEFAULT_TIMEOUT_MS = 60000;
 
-export async function generateGeminiText(prompt) {
+function getTimeoutMs() {
+  const configuredTimeout = Number(process.env.GEMINI_TIMEOUT_MS);
+  return Number.isFinite(configuredTimeout) && configuredTimeout > 0
+    ? configuredTimeout
+    : DEFAULT_TIMEOUT_MS;
+}
+
+async function readProviderError(response) {
+  try {
+    const payload = await response.json();
+    return payload?.error?.message || payload?.error?.status || "";
+  } catch {
+    return "";
+  }
+}
+
+function buildProviderError(status, providerMessage) {
+  return providerMessage
+    ? `Gemini request failed with status ${status}: ${providerMessage}`
+    : `Gemini request failed with status ${status}.`;
+}
+
+export async function generateGeminiText({ prompt, responseSchema }) {
   const apiKey = process.env.GEMINI_API_KEY;
   const model = process.env.GEMINI_MODEL;
+  const timeoutMs = getTimeoutMs();
 
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not configured.");
@@ -12,28 +36,54 @@ export async function generateGeminiText(prompt) {
     throw new Error("GEMINI_MODEL is not configured.");
   }
 
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      contents: [
-        {
-          role: "user",
-          parts: [{ text: prompt }]
+  if (!responseSchema) {
+    throw new Error("Gemini response schema is not configured.");
+  }
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let response;
+
+  try {
+    response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }]
+          }
+        ],
+        generationConfig: {
+          temperature: DEFAULT_TEMPERATURE,
+          responseFormat: {
+            text: {
+              mimeType: "application/json",
+              schema: responseSchema
+            }
+          }
         }
-      ],
-      generationConfig: {
-        temperature: DEFAULT_TEMPERATURE,
-        responseMimeType: "application/json"
-      }
-    })
-  });
+      })
+    });
+  } catch (error) {
+    if (controller.signal.aborted || error?.name === "AbortError") {
+      throw new Error(`Gemini request timed out after ${timeoutMs}ms.`);
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
-    throw new Error(`Gemini request failed with status ${response.status}.`);
+    const providerMessage = await readProviderError(response);
+    throw new Error(buildProviderError(response.status, providerMessage));
   }
 
   const payload = await response.json();

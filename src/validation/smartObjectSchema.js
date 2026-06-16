@@ -59,3 +59,36 @@ export const smartObjectSchemaForPrompt = {
     }
   }
 };
+
+export function buildSmartObjectResponseSchema(needs) {
+  const allowedNeedNames = needs.map((need) => need.name);
+
+  return {
+    ...smartObjectSchema,
+    properties: {
+      ...smartObjectSchema.properties,
+      objects: {
+        ...smartObjectSchema.properties.objects,
+        items: {
+          ...smartObjectSchema.properties.objects.items,
+          properties: {
+            ...smartObjectSchema.properties.objects.items.properties,
+            advertisements: {
+              ...smartObjectSchema.properties.objects.items.properties.advertisements,
+              items: {
+                ...smartObjectSchema.properties.objects.items.properties.advertisements.items,
+                properties: {
+                  ...smartObjectSchema.properties.objects.items.properties.advertisements.items.properties,
+                  need: {
+                    type: "string",
+                    enum: allowedNeedNames
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  };
+}

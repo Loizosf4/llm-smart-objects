@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildSmartObjectPrompt, buildSmartObjectRepairPrompt } from "./src/llm/buildSmartObjectPrompt.js";
 import { generateGeminiText } from "./src/llm/geminiClient.js";
+import { buildSmartObjectResponseSchema } from "./src/validation/smartObjectSchema.js";
 import { validateGenerationRequest } from "./src/validation/validateGenerationRequest.js";
 import { validateSmartObjectOutput } from "./src/validation/validateSmartObjectOutput.js";
 
@@ -31,9 +32,10 @@ export function createApp(options = {}) {
 
     const { locationDescription, needs } = requestValidation.value;
     const prompt = buildSmartObjectPrompt({ locationDescription, needs });
+    const responseSchema = buildSmartObjectResponseSchema(needs);
 
     try {
-      const firstText = await llmClient(prompt);
+      const firstText = await llmClient({ prompt, responseSchema });
       const firstValidation = validateSmartObjectOutput(firstText, needs);
 
       if (firstValidation.valid) {
@@ -46,7 +48,7 @@ export function createApp(options = {}) {
         locationDescription,
         needs
       });
-      const repairText = await llmClient(repairPrompt);
+      const repairText = await llmClient({ prompt: repairPrompt, responseSchema });
       const repairValidation = validateSmartObjectOutput(repairText, needs);
 
       if (repairValidation.valid) {
