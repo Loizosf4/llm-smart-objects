@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LLM Smart Object Generator</title>
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="editor-pane" aria-labelledby="app-title">
+        <header class="topbar">
+          <div>
+            <h1 id="app-title">LLM Smart Object Generator</h1>
+            <p>Generate physical objects with need advertisements and base weights.</p>
+          </div>
+          <button class="secondary-button" id="add-need" type="button">Add need</button>
+        </header>
+
+        <form id="generator-form">
+          <label class="field-label" for="location-description">Location description</label>
+          <textarea
+            id="location-description"
+            name="locationDescription"
+            placeholder="A small staff break room containing places to sit, prepare drinks, eat, rest and talk."
+            rows="5"
+            required
+          ></textarea>
+
+          <div class="section-heading">
+            <h2>Needs</h2>
+          </div>
+          <div id="needs-list" class="needs-list"></div>
+
+          <div id="error-box" class="message error" hidden></div>
+          <div id="status-box" class="message status" hidden></div>
+
+          <button id="generate-button" class="primary-button" type="submit">
+            <span id="button-label">Generate smart objects</span>
+          </button>
+        </form>
+      </section>
+
+      <section class="result-pane" aria-labelledby="result-title">
+        <div class="result-toolbar">
+          <div>
+            <h2 id="result-title">JSON result</h2>
+            <p id="validation-state">No generated output yet.</p>
+          </div>
+          <div class="toolbar-actions">
+            <button class="secondary-button" id="copy-json" type="button" disabled>Copy JSON</button>
+            <button class="secondary-button" id="download-json" type="button" disabled>Download JSON</button>
+            <button class="secondary-button" id="clear-result" type="button" disabled>Clear</button>
+          </div>
+        </div>
+        <pre id="json-viewer" class="json-viewer" aria-live="polite"></pre>
+
+        <div class="history-block">
+          <div class="section-heading">
+            <h2>Recent successful generations</h2>
+          </div>
+          <div id="history-list" class="history-list"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
