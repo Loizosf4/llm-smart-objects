@@ -80,11 +80,13 @@ test("Gemini request contains structured output config with need enum", async (t
 
   await generateGeminiText({ prompt: "Generate JSON.", responseSchema: responseSchema() });
 
-  const textFormat = capturedBody.generationConfig.responseFormat.text;
   assert.equal(capturedBody.generationConfig.temperature, 0.35);
-  assert.equal(textFormat.mimeType, "application/json");
+  assert.equal(capturedBody.generationConfig.responseMimeType, "application/json");
+  assert.equal("responseJsonSchema" in capturedBody.generationConfig, true);
+  assert.equal("responseFormat" in capturedBody.generationConfig, false);
   assert.deepEqual(
-    textFormat.schema.properties.objects.items.properties.advertisements.items.properties.need.enum,
+    capturedBody.generationConfig.responseJsonSchema
+      .properties.objects.items.properties.advertisements.items.properties.need.enum,
     ["rest", "comfort", "entertainment"]
   );
 });

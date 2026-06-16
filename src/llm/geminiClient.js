@@ -62,12 +62,8 @@ export async function generateGeminiText({ prompt, responseSchema }) {
         ],
         generationConfig: {
           temperature: DEFAULT_TEMPERATURE,
-          responseFormat: {
-            text: {
-              mimeType: "application/json",
-              schema: responseSchema
-            }
-          }
+          responseMimeType: "application/json",
+          responseJsonSchema: responseSchema
         }
       })
     });
