@@ -173,7 +173,6 @@ export const smartObjectSchema = {
                 },
                 advertisements: {
                   type: "array",
-                  minItems: 1,
                   items: {
                     type: "object",
                     additionalProperties: false,

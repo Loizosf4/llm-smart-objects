@@ -263,7 +263,7 @@ function validateAvailability(interaction, objectId, interactionId, objectCapaci
   }
 }
 
-function validateRequirements(interaction, objectId, interactionId, declaredStates, declaredResources, referencedStates, referencedResources, errors) {
+function validateRequirements(interaction, objectId, interactionId, declaredStates, declaredResources, requirementReferencedStates, referencedResources, errors) {
   if (!Object.hasOwn(interaction, "requirements")) {
     errors.push(`Interaction "${interactionId}" of object "${objectId}" is missing requirements.`);
     return;
@@ -304,7 +304,7 @@ function validateRequirements(interaction, objectId, interactionId, declaredStat
       } else if (!declaredStates.has(requirement.state)) {
         errors.push(`Requirement on interaction "${interactionId}" of object "${objectId}" references undeclared state "${requirement.state}".`);
       } else {
-        referencedStates.add(requirement.state);
+        requirementReferencedStates.add(requirement.state);
       }
 
       if (!Object.hasOwn(requirement, "value") || typeof requirement.value !== "boolean") {
@@ -336,33 +336,37 @@ function validateRequirements(interaction, objectId, interactionId, declaredStat
   }
 }
 
-function validateEffects(interaction, objectId, interactionId, declaredStates, declaredResources, referencedStates, referencedResources, errors) {
+function validateEffects(interaction, objectId, interactionId, declaredStates, declaredResources, referencedResources, errors) {
   if (!Object.hasOwn(interaction, "effects")) {
     errors.push(`Interaction "${interactionId}" of object "${objectId}" is missing effects.`);
-    return;
+    return 0;
   }
 
   if (!Array.isArray(interaction.effects)) {
     errors.push(`Effects on interaction "${interactionId}" of object "${objectId}" must be an array.`);
-    return;
+    return 0;
   }
 
   const seen = new Set();
+  let validEffectCount = 0;
   for (const effect of interaction.effects) {
     if (!effect || typeof effect !== "object" || Array.isArray(effect)) {
       errors.push(`Effect on interaction "${interactionId}" of object "${objectId}" must be an object.`);
       continue;
     }
 
+    let effectValid = true;
     const signature = JSON.stringify(effect);
     if (seen.has(signature)) {
       errors.push(`Duplicate effect on interaction "${interactionId}" of object "${objectId}".`);
+      effectValid = false;
     }
     seen.add(signature);
 
     for (const field of Object.keys(effect)) {
       if (!EFFECT_FIELDS.has(field)) {
         errors.push(`Unknown effect field "${field}" on interaction "${interactionId}" of object "${objectId}".`);
+        effectValid = false;
       }
     }
 
@@ -374,39 +378,51 @@ function validateEffects(interaction, objectId, interactionId, declaredStates, d
     if (effect.type === "set_state") {
       if (!Object.hasOwn(effect, "state")) {
         errors.push(`set_state effect on interaction "${interactionId}" of object "${objectId}" requires state.`);
+        effectValid = false;
       } else if (!declaredStates.has(effect.state)) {
         errors.push(`Effect on interaction "${interactionId}" of object "${objectId}" references undeclared state "${effect.state}".`);
-      } else {
-        referencedStates.add(effect.state);
+        effectValid = false;
       }
 
       if (!Object.hasOwn(effect, "value") || typeof effect.value !== "boolean") {
         errors.push(`set_state effect on interaction "${interactionId}" of object "${objectId}" requires Boolean value.`);
+        effectValid = false;
       }
 
       if (Object.hasOwn(effect, "resource") || Object.hasOwn(effect, "amount")) {
         errors.push(`set_state effect on interaction "${interactionId}" of object "${objectId}" must not contain resource fields.`);
+        effectValid = false;
       }
     }
 
     if (effect.type === "change_resource") {
       if (!Object.hasOwn(effect, "resource")) {
         errors.push(`change_resource effect on interaction "${interactionId}" of object "${objectId}" requires resource.`);
+        effectValid = false;
       } else if (!declaredResources.has(effect.resource)) {
         errors.push(`Effect on interaction "${interactionId}" of object "${objectId}" references undeclared resource "${effect.resource}".`);
+        effectValid = false;
       } else {
         referencedResources.add(effect.resource);
       }
 
       if (!Object.hasOwn(effect, "amount") || !Number.isInteger(effect.amount) || effect.amount === 0 || effect.amount < -100000 || effect.amount > 100000) {
         errors.push(`change_resource effect on interaction "${interactionId}" of object "${objectId}" requires non-zero integer amount between -100000 and 100000.`);
+        effectValid = false;
       }
 
       if (Object.hasOwn(effect, "state") || Object.hasOwn(effect, "value")) {
         errors.push(`change_resource effect on interaction "${interactionId}" of object "${objectId}" must not contain state fields.`);
+        effectValid = false;
       }
     }
+
+    if (effectValid) {
+      validEffectCount += 1;
+    }
   }
+
+  return validEffectCount;
 }
 
 export function validateSmartObjectData(data, needs) {
@@ -443,7 +459,7 @@ export function validateSmartObjectData(data, needs) {
     const declaredResources = object && typeof object === "object" && !Array.isArray(object)
       ? validateResources(object, objectId, errors)
       : new Set();
-    const referencedStates = new Set();
+    const requirementReferencedStates = new Set();
     const referencedResources = new Set();
 
     if (!object || !Array.isArray(object.interactions)) {
@@ -475,8 +491,12 @@ export function validateSmartObjectData(data, needs) {
         }
 
         validateAvailability(interaction, objectId, interactionId, objectCapacityType, errors);
-        validateRequirements(interaction, objectId, interactionId, declaredStates, declaredResources, referencedStates, referencedResources, errors);
-        validateEffects(interaction, objectId, interactionId, declaredStates, declaredResources, referencedStates, referencedResources, errors);
+        validateRequirements(interaction, objectId, interactionId, declaredStates, declaredResources, requirementReferencedStates, referencedResources, errors);
+        const validEffectCount = validateEffects(interaction, objectId, interactionId, declaredStates, declaredResources, referencedResources, errors);
+
+        if (Array.isArray(interaction.advertisements) && interaction.advertisements.length === 0 && validEffectCount === 0) {
+          errors.push(`Interaction "${interactionId}" of object "${objectId}" must advertise at least one need or contain at least one object-side effect.`);
+        }
       }
 
       if (!interaction || !Array.isArray(interaction.advertisements)) {
@@ -501,8 +521,8 @@ export function validateSmartObjectData(data, needs) {
     }
 
     for (const stateId of declaredStates) {
-      if (!referencedStates.has(stateId)) {
-        errors.push(`State flag "${stateId}" on object "${objectId}" is declared but never referenced.`);
+      if (!requirementReferencedStates.has(stateId)) {
+        errors.push(`State flag "${stateId}" on object "${objectId}" is never referenced by an interaction requirement.`);
       }
     }
 

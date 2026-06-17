@@ -1,6 +1,6 @@
 # LLM Smart Object Generator
 
-An experimental environment-first generator for manually inspecting smart-object JSON. Version 5 tests whether an LLM can determine which generated objects genuinely require simple state flags or finite consumable resources, connect interactions to those declarations, and avoid unnecessarily adding state to ordinary objects.
+An experimental environment-first generator for manually inspecting smart-object JSON. Version 5 tests whether an LLM can determine which generated objects genuinely require simple state flags or finite consumable resources, connect interactions to those declarations, distinguish direct need-satisfying interactions from object-side support actions, and avoid unnecessarily adding state to ordinary objects.
 
 The generated structure is:
 
@@ -187,6 +187,8 @@ The twelve defaults are `hunger`, `thirst`, `rest`, `comfort`, `entertainment`, 
 
 Generated advertisements remain only `{ "need": "...", "weight": ... }`. Need definitions and calibration references are prompt context only.
 
+Every interaction still has an `advertisements` array. The array may be empty only when the interaction has at least one valid object-side effect, such as turning a device on or off, cleaning an object, repairing it, opening or closing it, or refilling finite stock. Empty advertisements with no effects, or with requirements only, are invalid. The generator should not invent tiny advertisements merely to make this array non-empty.
+
 ## Capacity
 
 Capacity remains object-level. Every object has `capacity`, and all interactions on that object share the same capacity pool.
@@ -219,7 +221,9 @@ Approved state IDs are exactly:
 - `open`
 - `clean`
 
-Each state ID must be unique within an object. Every declared state must be referenced by at least one requirement or effect on that object. Do not use state flags for occupancy, reservations, queues, capacity, NPC needs, NPC inventory, time, duration, or object count.
+Each state ID must be unique within an object. Every declared state must be referenced by at least one interaction requirement on that object. Effects may set declared states, but effect-only references do not satisfy the state-use rule. Do not create aftermath-only state flags that never affect whether an interaction is available. Do not use state flags for occupancy, reservations, queues, capacity, NPC needs, NPC inventory, time, duration, or object count.
+
+When a reusable object can move into a blocking state, include a coherent restoration interaction when appropriate. For example, a toilet may have `use_toilet` requiring `clean: true` and setting `clean: false`, plus `clean_toilet` requiring `clean: false`, setting `clean: true`, and using empty advertisements because it is maintenance rather than direct need satisfaction.
 
 ## Finite Resources
 
@@ -264,6 +268,8 @@ Negative resource changes consume stock; positive changes replenish stock. Effec
 ## Validation
 
 Generated JSON is schema-validated and then checked with custom validation. Validation rejects malformed JSON, unknown fields, invalid capacity, capacity/availability mismatches, old `when_free`, invalid duration, invalid IDs, duplicate IDs, unsupported need names, invalid weights, invalid or unused state declarations, invalid or unused resources, malformed requirements, malformed effects, undeclared local references, duplicate identical requirements/effects, and forbidden runtime/NPC/cross-object fields.
+
+State declarations are considered used only when referenced by an interaction requirement. Resource declarations are considered used when referenced by either a requirement or an effect, so refill-only effects remain valid. Empty advertisements are valid only for interactions with at least one valid object-side effect.
 
 The server asks the LLM for one focused repair attempt before returning a validation failure.
 

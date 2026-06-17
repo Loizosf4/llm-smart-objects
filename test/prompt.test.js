@@ -103,6 +103,28 @@ test("prompt forbids runtime state execution", () => {
   assert.match(prompt, /Do not generate runtime state engine/);
 });
 
+test("prompt allows empty advertisements only for effectful support interactions", () => {
+  const prompt = buildSmartObjectPrompt({ locationDescription: "staff room", needs });
+  assert.match(prompt, /Support, control, and maintenance interactions may use an empty advertisements array/);
+  assert.match(prompt, /advertisements property is required on every interaction/);
+  assert.match(prompt, /array may be empty only .*at least one object-side effect/);
+});
+
+test("prompt forbids invented low-weight advertisements for controls", () => {
+  const prompt = buildSmartObjectPrompt({ locationDescription: "staff room", needs });
+  assert.match(prompt, /Never invent tiny or weak advertisements/);
+  assert.match(prompt, /Low weights such as 0\.05 still require a genuine need-satisfaction relationship/);
+  assert.match(prompt, /turn_on_tv/);
+});
+
+test("prompt requires state lifecycle requirements, not aftermath-only state", () => {
+  const prompt = buildSmartObjectPrompt({ locationDescription: "staff room", needs });
+  assert.match(prompt, /Every declared state must be referenced by at least one requirement/);
+  assert.match(prompt, /effect-only reference does not justify declaring the state/);
+  assert.match(prompt, /Do not create a state merely to record aftermath/);
+  assert.match(prompt, /restoration interaction when appropriate/);
+});
+
 test("repair prompt also includes calibration references", () => {
   const prompt = buildSmartObjectRepairPrompt({
     invalidOutput: "{}",
@@ -135,8 +157,22 @@ test("repair prompt includes declaration and reference rules", () => {
     needs
   });
   assert.match(prompt, /Every object must contain stateFlags and resources arrays/);
-  assert.match(prompt, /Every declared state or resource must be referenced/);
+  assert.match(prompt, /Every declared state must be referenced by at least one requirement/);
+  assert.match(prompt, /Every declared resource must be referenced by a requirement or effect/);
   assert.match(prompt, /Requirements and effects must reference declarations on the same parent object only/);
+});
+
+test("repair prompt includes empty-advertisement and state-use repair rules", () => {
+  const prompt = buildSmartObjectRepairPrompt({
+    invalidOutput: "{}",
+    validationErrors: ["invalid"],
+    locationDescription: "staff room",
+    needs
+  });
+  assert.match(prompt, /advertisements array may be empty only when the interaction contains at least one object-side effect/);
+  assert.match(prompt, /Never invent tiny advertisements/);
+  assert.match(prompt, /Every declared state must be referenced by at least one requirement/);
+  assert.match(prompt, /effect-only state references do not make that state useful/);
 });
 
 test("dynamic generated-output need enum still uses only need names", () => {
@@ -146,4 +182,12 @@ test("dynamic generated-output need enum still uses only need names", () => {
       .properties.advertisements.items.properties.need.enum,
     ["rest", "hygiene"]
   );
+});
+
+test("dynamic generated-output schema keeps advertisements required but allows empty arrays", () => {
+  const schema = buildSmartObjectResponseSchema(needs);
+  const interactionSchema = schema.properties.objects.items.properties.interactions.items;
+  const advertisementsSchema = interactionSchema.properties.advertisements;
+  assert.equal(interactionSchema.required.includes("advertisements"), true);
+  assert.equal("minItems" in advertisementsSchema, false);
 });

@@ -137,6 +137,12 @@ test("Gemini request contains structured output config with need enum", async (t
       .properties.advertisements.items.properties.need.enum,
     ["rest", "comfort", "entertainment"]
   );
+  assert.equal(
+    "minItems" in capturedBody.generationConfig.responseJsonSchema
+      .properties.objects.items.properties.interactions.items
+      .properties.advertisements,
+    false
+  );
 });
 
 test("Gemini non-success responses include readable provider errors", async (t) => {

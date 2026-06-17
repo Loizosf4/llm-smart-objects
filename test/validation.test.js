@@ -880,6 +880,7 @@ test("valid state declaration and state effect passes", () => {
         interactions: [
           interaction({
             id: "open_cabinet",
+            requirements: [{ type: "state_equals", state: "open", value: false }],
             effects: [{ type: "set_state", state: "open", value: true }]
           })
         ]
@@ -887,6 +888,82 @@ test("valid state declaration and state effect passes", () => {
     ]
   }), needs);
   assert.equal(result.valid, true);
+});
+
+test("effect-only state-control interaction with empty advertisements passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        stateFlags: [{ id: "powered_on", initial: false }],
+        interactions: [
+          interaction({
+            id: "turn_on_tv",
+            requirements: [{ type: "state_equals", state: "powered_on", value: false }],
+            effects: [{ type: "set_state", state: "powered_on", value: true }],
+            advertisements: []
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("effect-only resource-refill interaction with empty advertisements passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        resources: [{ id: "coffee_servings", initial: 0, maximum: 20 }],
+        interactions: [
+          interaction({
+            id: "refill_coffee_machine",
+            effects: [{ type: "change_resource", resource: "coffee_servings", amount: 20 }],
+            advertisements: []
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("empty advertisements and empty effects fail", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        id: "device_01",
+        interactions: [
+          interaction({
+            id: "do_nothing",
+            advertisements: [],
+            effects: []
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must advertise at least one need or contain at least one object-side effect/);
+});
+
+test("empty advertisements with only requirements fail", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        stateFlags: [{ id: "powered_on", initial: true }],
+        interactions: [
+          interaction({
+            id: "check_power",
+            requirements: [{ type: "state_equals", state: "powered_on", value: true }],
+            advertisements: [],
+            effects: []
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must advertise at least one need or contain at least one object-side effect/);
 });
 
 test("valid resource declaration and requirement passes", () => {
@@ -1011,7 +1088,110 @@ test("unused state declaration fails", () => {
     objects: [object({ stateFlags: [{ id: "operational", initial: true }] })]
   }), needs);
   assert.equal(result.valid, false);
-  assert.match(result.errors.join(" "), /declared but never referenced/);
+  assert.match(result.errors.join(" "), /never referenced by an interaction requirement/);
+});
+
+test("state referenced only by an effect fails state-use rule", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        id: "toilet_01",
+        type: "toilet",
+        capacity: { type: "limited", slots: 1 },
+        stateFlags: [{ id: "clean", initial: true }],
+        interactions: [
+          interaction({
+            id: "use_toilet",
+            effects: [{ type: "set_state", state: "clean", value: false }]
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /State flag "clean" on object "toilet_01" is never referenced by an interaction requirement/);
+});
+
+test("state referenced by a requirement and changed by an effect passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        stateFlags: [{ id: "clean", initial: true }],
+        interactions: [
+          interaction({
+            id: "use_toilet",
+            requirements: [{ type: "state_equals", state: "clean", value: true }],
+            effects: [{ type: "set_state", state: "clean", value: false }]
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("television on watch off lifecycle passes with empty advertisements on controls", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        id: "television_01",
+        type: "television",
+        capacity: { type: "unlimited" },
+        stateFlags: [{ id: "powered_on", initial: false }],
+        interactions: [
+          interaction({
+            id: "turn_on_tv",
+            availability: { type: "always" },
+            requirements: [{ type: "state_equals", state: "powered_on", value: false }],
+            effects: [{ type: "set_state", state: "powered_on", value: true }],
+            advertisements: []
+          }),
+          interaction({
+            id: "watch_tv",
+            availability: { type: "always" },
+            requirements: [{ type: "state_equals", state: "powered_on", value: true }],
+            effects: [],
+            advertisements: [{ need: "rest", weight: 0.2 }]
+          }),
+          interaction({
+            id: "turn_off_tv",
+            availability: { type: "always" },
+            requirements: [{ type: "state_equals", state: "powered_on", value: true }],
+            effects: [{ type: "set_state", state: "powered_on", value: false }],
+            advertisements: []
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("toilet clean dirty lifecycle with restoration passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        id: "toilet_01",
+        type: "toilet",
+        capacity: { type: "limited", slots: 1 },
+        stateFlags: [{ id: "clean", initial: true }],
+        interactions: [
+          interaction({
+            id: "use_toilet",
+            requirements: [{ type: "state_equals", state: "clean", value: true }],
+            effects: [{ type: "set_state", state: "clean", value: false }]
+          }),
+          interaction({
+            id: "clean_toilet",
+            requirements: [{ type: "state_equals", state: "clean", value: false }],
+            effects: [{ type: "set_state", state: "clean", value: true }],
+            advertisements: []
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
 });
 
 test("missing resources fails", () => {
