@@ -41,7 +41,7 @@ test("Gemini request uses API key header and keeps key out of URL", async (t) =>
         candidates: [
           {
             content: {
-              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"capacity\":{\"type\":\"limited\",\"slots\":3},\"interactions\":[{\"id\":\"sit_and_relax\",\"duration\":{\"type\":\"continuous\"},\"availability\":{\"type\":\"when_capacity_available\"},\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
+              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"capacity\":{\"type\":\"limited\",\"slots\":3},\"stateFlags\":[],\"resources\":[],\"interactions\":[{\"id\":\"sit_and_relax\",\"duration\":{\"type\":\"continuous\"},\"availability\":{\"type\":\"when_capacity_available\"},\"requirements\":[],\"effects\":[],\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
             }
           }
         ]
@@ -70,7 +70,7 @@ test("Gemini request contains structured output config with need enum", async (t
         candidates: [
           {
             content: {
-              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"capacity\":{\"type\":\"limited\",\"slots\":3},\"interactions\":[{\"id\":\"sit_and_relax\",\"duration\":{\"type\":\"continuous\"},\"availability\":{\"type\":\"when_capacity_available\"},\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
+              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"capacity\":{\"type\":\"limited\",\"slots\":3},\"stateFlags\":[],\"resources\":[],\"interactions\":[{\"id\":\"sit_and_relax\",\"duration\":{\"type\":\"continuous\"},\"availability\":{\"type\":\"when_capacity_available\"},\"requirements\":[],\"effects\":[],\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
             }
           }
         ]
@@ -92,7 +92,26 @@ test("Gemini request contains structured output config with need enum", async (t
   assert.deepEqual(
     capturedBody.generationConfig.responseJsonSchema
       .properties.objects.items.required,
-    ["id", "type", "capacity", "interactions"]
+    ["id", "type", "capacity", "stateFlags", "resources", "interactions"]
+  );
+  assert.deepEqual(
+    capturedBody.generationConfig.responseJsonSchema
+      .properties.objects.items.properties.stateFlags.items.properties.id.enum,
+    ["powered_on", "operational", "locked", "open", "clean"]
+  );
+  assert.equal(
+    "resources" in capturedBody.generationConfig.responseJsonSchema.properties.objects.items.properties,
+    true
+  );
+  assert.deepEqual(
+    capturedBody.generationConfig.responseJsonSchema
+      .properties.objects.items.properties.interactions.items.properties.requirements.items.properties.type.enum,
+    ["state_equals", "resource_at_least"]
+  );
+  assert.deepEqual(
+    capturedBody.generationConfig.responseJsonSchema
+      .properties.objects.items.properties.interactions.items.properties.effects.items.properties.type.enum,
+    ["set_state", "change_resource"]
   );
   assert.deepEqual(
     capturedBody.generationConfig.responseJsonSchema

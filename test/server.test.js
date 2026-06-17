@@ -39,11 +39,15 @@ test("API repairs invalid first LLM output once", async () => {
           id: "poster_01",
           type: "poster",
           capacity: { type: "unlimited", slots: 2 },
+          stateFlags: [],
+          resources: [],
           interactions: [
             {
               id: "look_at_poster",
               duration: { type: "fixed", seconds: 20 },
               availability: { type: "always" },
+              requirements: [],
+              effects: [],
               advertisements: [{ need: "thirst", weight: 0.5 }]
             }
           ]
@@ -57,11 +61,15 @@ test("API repairs invalid first LLM output once", async () => {
           id: "water_dispenser_01",
           type: "water_dispenser",
           capacity: { type: "limited", slots: 1 },
+          stateFlags: [],
+          resources: [],
           interactions: [
             {
               id: "drink_water",
               duration: { type: "fixed", seconds: 20 },
               availability: { type: "when_capacity_available" },
+              requirements: [],
+              effects: [],
               advertisements: [{ need: "thirst", weight: 0.9 }]
             }
           ]
@@ -134,11 +142,15 @@ test("API repairs inconsistent availability once", async () => {
           id: "sofa_01",
           type: "three_seat_sofa",
           capacity: { type: "limited", slots: 3 },
+          stateFlags: [],
+          resources: [],
           interactions: [
             {
               id: "sit_and_relax",
               duration: { type: "continuous" },
               availability: { type: "always" },
+              requirements: [],
+              effects: [],
               advertisements: [{ need: "rest", weight: 0.6 }]
             }
           ]
@@ -152,11 +164,15 @@ test("API repairs inconsistent availability once", async () => {
           id: "sofa_01",
           type: "three_seat_sofa",
           capacity: { type: "limited", slots: 3 },
+          stateFlags: [],
+          resources: [],
           interactions: [
             {
               id: "sit_and_relax",
               duration: { type: "continuous" },
               availability: { type: "when_capacity_available" },
+              requirements: [],
+              effects: [],
               advertisements: [{ need: "rest", weight: 0.6 }]
             }
           ]
@@ -185,6 +201,146 @@ test("API repairs inconsistent availability once", async () => {
     assert.equal(response.status, 200);
     assert.equal(payload.success, true);
     assert.deepEqual(payload.data.objects[0].interactions[0].availability, { type: "when_capacity_available" });
+  } finally {
+    await close(server);
+  }
+});
+
+test("API repairs undeclared state output once", async () => {
+  const calls = [
+    JSON.stringify({
+      location: "break room",
+      objects: [
+        {
+          id: "computer_01",
+          type: "computer",
+          capacity: { type: "limited", slots: 1 },
+          stateFlags: [],
+          resources: [],
+          interactions: [
+            {
+              id: "use_computer",
+              duration: { type: "continuous" },
+              availability: { type: "when_capacity_available" },
+              requirements: [{ type: "state_equals", state: "powered_on", value: true }],
+              effects: [],
+              advertisements: [{ need: "mental_activity", weight: 0.5 }]
+            }
+          ]
+        }
+      ]
+    }),
+    JSON.stringify({
+      location: "break room",
+      objects: [
+        {
+          id: "computer_01",
+          type: "computer",
+          capacity: { type: "limited", slots: 1 },
+          stateFlags: [{ id: "powered_on", initial: true }],
+          resources: [],
+          interactions: [
+            {
+              id: "use_computer",
+              duration: { type: "continuous" },
+              availability: { type: "when_capacity_available" },
+              requirements: [{ type: "state_equals", state: "powered_on", value: true }],
+              effects: [],
+              advertisements: [{ need: "mental_activity", weight: 0.5 }]
+            }
+          ]
+        }
+      ]
+    })
+  ];
+
+  const app = createApp({ llmClient: async () => calls.shift() });
+  const server = await listen(app);
+
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/api/generate-smart-objects`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        locationDescription: "break room",
+        needs: [need("mental_activity", "Think.")]
+      })
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.success, true);
+    assert.deepEqual(payload.data.objects[0].stateFlags, [{ id: "powered_on", initial: true }]);
+  } finally {
+    await close(server);
+  }
+});
+
+test("API repairs invalid resource output once", async () => {
+  const calls = [
+    JSON.stringify({
+      location: "break room",
+      objects: [
+        {
+          id: "vending_machine_01",
+          type: "vending_machine",
+          capacity: { type: "limited", slots: 1 },
+          stateFlags: [],
+          resources: [{ id: "snack_units", initial: 12, maximum: 10 }],
+          interactions: [
+            {
+              id: "get_and_eat_snack",
+              duration: { type: "fixed", seconds: 120 },
+              availability: { type: "when_capacity_available" },
+              requirements: [{ type: "resource_at_least", resource: "snack_units", amount: 1 }],
+              effects: [{ type: "change_resource", resource: "snack_units", amount: -1 }],
+              advertisements: [{ need: "hunger", weight: 0.3 }]
+            }
+          ]
+        }
+      ]
+    }),
+    JSON.stringify({
+      location: "break room",
+      objects: [
+        {
+          id: "vending_machine_01",
+          type: "vending_machine",
+          capacity: { type: "limited", slots: 1 },
+          stateFlags: [],
+          resources: [{ id: "snack_units", initial: 10, maximum: 12 }],
+          interactions: [
+            {
+              id: "get_and_eat_snack",
+              duration: { type: "fixed", seconds: 120 },
+              availability: { type: "when_capacity_available" },
+              requirements: [{ type: "resource_at_least", resource: "snack_units", amount: 1 }],
+              effects: [{ type: "change_resource", resource: "snack_units", amount: -1 }],
+              advertisements: [{ need: "hunger", weight: 0.3 }]
+            }
+          ]
+        }
+      ]
+    })
+  ];
+
+  const app = createApp({ llmClient: async () => calls.shift() });
+  const server = await listen(app);
+
+  try {
+    const { port } = server.address();
+    const response = await fetch(`http://127.0.0.1:${port}/api/generate-smart-objects`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        locationDescription: "break room",
+        needs: [need("hunger", "Eat.")]
+      })
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 200);
+    assert.equal(payload.success, true);
+    assert.deepEqual(payload.data.objects[0].resources, [{ id: "snack_units", initial: 10, maximum: 12 }]);
   } finally {
     await close(server);
   }

@@ -36,6 +36,8 @@ function interaction(overrides = {}) {
     id: "sit_and_relax",
     duration: { type: "continuous" },
     availability: { type: "when_capacity_available" },
+    requirements: [],
+    effects: [],
     advertisements: [{ need: "rest", weight: 0.6 }],
     ...overrides
   };
@@ -46,6 +48,8 @@ function object(overrides = {}) {
     id: "sofa_01",
     type: "sofa",
     capacity: { type: "limited", slots: 3 },
+    stateFlags: [],
+    resources: [],
     interactions: [interaction()],
     ...overrides
   };
@@ -561,6 +565,8 @@ test("same interaction ID on different objects is allowed", () => {
         id: "armchair_01",
         type: "armchair",
         capacity: { type: "limited", slots: 1 },
+        stateFlags: [],
+        resources: [],
         interactions: [
           interaction({ advertisements: [{ need: "rest", weight: 0.5 }] })
         ]
@@ -843,6 +849,453 @@ test("multiple interactions on one object share the same object capacity structu
     ]
   }), needs);
   assert.equal(result.valid, true);
+});
+
+test("passive object with empty state and resource arrays passes", () => {
+  const result = validateSmartObjectOutput(output(), needs);
+  assert.equal(result.valid, true);
+});
+
+test("valid state declaration and requirement passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        stateFlags: [{ id: "operational", initial: true }],
+        interactions: [
+          interaction({
+            requirements: [{ type: "state_equals", state: "operational", value: true }]
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("valid state declaration and state effect passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        stateFlags: [{ id: "open", initial: false }],
+        interactions: [
+          interaction({
+            id: "open_cabinet",
+            effects: [{ type: "set_state", state: "open", value: true }]
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("valid resource declaration and requirement passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        resources: [{ id: "snack_units", initial: 12, maximum: 20 }],
+        interactions: [
+          interaction({
+            requirements: [{ type: "resource_at_least", resource: "snack_units", amount: 1 }]
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("valid negative resource change passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        resources: [{ id: "coffee_servings", initial: 20, maximum: 20 }],
+        interactions: [
+          interaction({
+            effects: [{ type: "change_resource", resource: "coffee_servings", amount: -1 }]
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("valid positive resource change passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        resources: [{ id: "paper_sheets", initial: 0, maximum: 100 }],
+        interactions: [
+          interaction({
+            id: "refill_paper",
+            effects: [{ type: "change_resource", resource: "paper_sheets", amount: 20 }]
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("state and resource declarations are shared across interactions", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        stateFlags: [{ id: "operational", initial: true }],
+        resources: [{ id: "snack_units", initial: 4, maximum: 10 }],
+        interactions: [
+          interaction({
+            id: "check_machine",
+            requirements: [{ type: "state_equals", state: "operational", value: true }]
+          }),
+          interaction({
+            id: "get_snack",
+            requirements: [{ type: "resource_at_least", resource: "snack_units", amount: 1 }],
+            effects: [{ type: "change_resource", resource: "snack_units", amount: -1 }]
+          })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("missing stateFlags fails", () => {
+  const { stateFlags, ...rawObject } = object();
+  const result = validateSmartObjectOutput(output({ objects: [rawObject] }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /missing stateFlags/);
+});
+
+test("unsupported state ID fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ stateFlags: [{ id: "occupied", initial: false }] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unsupported state flag "occupied"/);
+});
+
+test("duplicate state IDs fail", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({
+      stateFlags: [
+        { id: "operational", initial: true },
+        { id: "operational", initial: false }
+      ],
+      interactions: [interaction({ requirements: [{ type: "state_equals", state: "operational", value: true }] })]
+    })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Duplicate state flag "operational"/);
+});
+
+test("non-Boolean initial state fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ stateFlags: [{ id: "operational", initial: "true" }] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /requires Boolean initial value/);
+});
+
+test("extra state field fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ stateFlags: [{ id: "operational", initial: true, since: "now" }] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unknown state flag field "since"/);
+});
+
+test("unused state declaration fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ stateFlags: [{ id: "operational", initial: true }] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /declared but never referenced/);
+});
+
+test("missing resources fails", () => {
+  const { resources, ...rawObject } = object();
+  const result = validateSmartObjectOutput(output({ objects: [rawObject] }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /missing resources/);
+});
+
+test("invalid resource ID fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ resources: [{ id: "Snack Units", initial: 1, maximum: 2 }] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Invalid resource id/);
+});
+
+test("duplicate resource IDs fail", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({
+      resources: [
+        { id: "snack_units", initial: 1, maximum: 2 },
+        { id: "snack_units", initial: 1, maximum: 2 }
+      ],
+      interactions: [interaction({ requirements: [{ type: "resource_at_least", resource: "snack_units", amount: 1 }] })]
+    })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Duplicate resource id "snack_units"/);
+});
+
+test("resource initial below zero fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ resources: [{ id: "snack_units", initial: -1, maximum: 2 }] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /initial value must be between 0 and 100000/);
+});
+
+test("resource initial greater than maximum fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ resources: [{ id: "snack_units", initial: 3, maximum: 2 }] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /initial value greater than maximum/);
+});
+
+test("resource maximum below one fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ resources: [{ id: "snack_units", initial: 0, maximum: 0 }] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /maximum value must be between 1 and 100000/);
+});
+
+test("fractional resource values fail", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ resources: [{ id: "snack_units", initial: 1.5, maximum: 2 }] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /initial value must be an integer/);
+});
+
+test("extra resource field fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ resources: [{ id: "snack_units", initial: 1, maximum: 2, current_users: 0 }] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unknown resource field "current_users"/);
+});
+
+test("unused resource declaration fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ resources: [{ id: "snack_units", initial: 1, maximum: 2 }] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Resource "snack_units" on object "sofa_01" is declared but never referenced/);
+});
+
+test("missing requirements fails", () => {
+  const { requirements, ...rawInteraction } = interaction();
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ interactions: [rawInteraction] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /missing requirements/);
+});
+
+test("unknown requirement type fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ interactions: [interaction({ requirements: [{ type: "npc_need_at_least", need: "hunger", amount: 0.5 }] })] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unsupported requirement type/);
+});
+
+test("invalid state_equals shape fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({
+      stateFlags: [{ id: "operational", initial: true }],
+      interactions: [interaction({ requirements: [{ type: "state_equals", state: "operational", value: true, resource: "snack_units" }] })]
+    })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must not contain resource fields/);
+});
+
+test("undeclared state requirement fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ interactions: [interaction({ requirements: [{ type: "state_equals", state: "operational", value: true }] })] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /references undeclared state "operational"/);
+});
+
+test("invalid resource_at_least shape fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({
+      resources: [{ id: "snack_units", initial: 1, maximum: 2 }],
+      interactions: [interaction({ requirements: [{ type: "resource_at_least", resource: "snack_units", amount: 1, value: true }] })]
+    })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must not contain state fields/);
+});
+
+test("undeclared resource requirement fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ interactions: [interaction({ requirements: [{ type: "resource_at_least", resource: "snack_units", amount: 1 }] })] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /references undeclared resource "snack_units"/);
+});
+
+test("resource requirement amount below one fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({
+      resources: [{ id: "snack_units", initial: 1, maximum: 2 }],
+      interactions: [interaction({ requirements: [{ type: "resource_at_least", resource: "snack_units", amount: 0 }] })]
+    })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /requires integer amount between 1 and 100000/);
+});
+
+test("extra requirement field fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ interactions: [interaction({ requirements: [{ type: "state_equals", state: "operational", value: true, role: "staff" }] })] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unknown requirement field "role"/);
+});
+
+test("duplicate identical requirement fails", () => {
+  const req = { type: "state_equals", state: "operational", value: true };
+  const result = validateSmartObjectOutput(output({
+    objects: [object({
+      stateFlags: [{ id: "operational", initial: true }],
+      interactions: [interaction({ requirements: [req, req] })]
+    })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Duplicate requirement/);
+});
+
+test("capacity requirement field fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ interactions: [interaction({ requirements: [{ type: "resource_at_least", resource: "capacity_slots", amount: 1, available_slots: 1 }] })] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unknown requirement field "available_slots"/);
+});
+
+test("missing effects fails", () => {
+  const { effects, ...rawInteraction } = interaction();
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ interactions: [rawInteraction] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /missing effects/);
+});
+
+test("unknown effect type fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ interactions: [interaction({ effects: [{ type: "satisfy_need", need: "hunger", amount: 0.5 }] })] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unsupported effect type/);
+});
+
+test("invalid set_state shape fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({
+      stateFlags: [{ id: "open", initial: false }],
+      interactions: [interaction({ effects: [{ type: "set_state", state: "open", value: true, amount: 1 }] })]
+    })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must not contain resource fields/);
+});
+
+test("undeclared state effect fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ interactions: [interaction({ effects: [{ type: "set_state", state: "open", value: true }] })] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /references undeclared state "open"/);
+});
+
+test("invalid change_resource shape fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({
+      resources: [{ id: "snack_units", initial: 1, maximum: 2 }],
+      interactions: [interaction({ effects: [{ type: "change_resource", resource: "snack_units", amount: -1, state: "open" }] })]
+    })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must not contain state fields/);
+});
+
+test("undeclared resource effect fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ interactions: [interaction({ effects: [{ type: "change_resource", resource: "snack_units", amount: -1 }] })] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /references undeclared resource "snack_units"/);
+});
+
+test("zero resource-change amount fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({
+      resources: [{ id: "snack_units", initial: 1, maximum: 2 }],
+      interactions: [interaction({ effects: [{ type: "change_resource", resource: "snack_units", amount: 0 }] })]
+    })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /non-zero integer amount/);
+});
+
+test("fractional resource-change amount fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({
+      resources: [{ id: "snack_units", initial: 1, maximum: 2 }],
+      interactions: [interaction({ effects: [{ type: "change_resource", resource: "snack_units", amount: -0.5 }] })]
+    })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /non-zero integer amount/);
+});
+
+test("extra effect field fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ interactions: [interaction({ effects: [{ type: "set_state", state: "open", value: true, queue_length: 1 }] })] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unknown effect field "queue_length"/);
+});
+
+test("duplicate identical effect fails", () => {
+  const effect = { type: "set_state", state: "open", value: true };
+  const result = validateSmartObjectOutput(output({
+    objects: [object({
+      stateFlags: [{ id: "open", initial: false }],
+      interactions: [interaction({ effects: [effect, effect] })]
+    })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Duplicate effect/);
+});
+
+test("need-change effect fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ interactions: [interaction({ effects: [{ type: "change_need", need: "hunger", amount: -1 }] })] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unsupported effect type/);
+});
+
+test("occupancy effect fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [object({ interactions: [interaction({ effects: [{ type: "change_resource", resource: "current_users", amount: 1, occupant_ids: ["npc_01"] }] })] })]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unknown effect field "occupant_ids"/);
 });
 
 test("malformed JSON produces a controlled error", () => {

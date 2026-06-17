@@ -1,20 +1,24 @@
 # LLM Smart Object Generator
 
-An experimental environment-first generator for manually inspecting smart-object JSON. Version 4 tests whether an LLM can assign plausible simultaneous-user capacities to generated environmental objects and distinguish finite-capacity objects from interactions that do not require meaningful exclusive usage slots.
+An experimental environment-first generator for manually inspecting smart-object JSON. Version 5 tests whether an LLM can determine which generated objects genuinely require simple state flags or finite consumable resources, connect interactions to those declarations, and avoid unnecessarily adding state to ordinary objects.
 
 The generated structure is:
 
 ```text
 Object
 -> Capacity
+-> State flags
+-> Finite resources
 -> Interactions
    -> Duration
    -> Capacity-aware availability
+   -> Object-side requirements
+   -> Declarative effects
    -> Advertised needs
    -> Weights
 ```
 
-This remains a JSON-generation experiment. Version 4 adds only static object capacity and capacity-aware availability. It does not include runtime occupancy, reservations, queues, resources, object state, animations, Behavior Trees, utility execution, simulator code, databases, authentication, or cloud storage.
+This remains a JSON-generation experiment. Version 5 adds only constrained object-side state and finite resource metadata. It does not include a simulator, runtime state changes, resource mutation, occupancy, reservations, queues, NPC conditions, planning, animations, Behavior Trees, executable code, databases, authentication, or cloud storage.
 
 ## Installation
 
@@ -35,7 +39,7 @@ GEMINI_TIMEOUT_MS=60000
 PORT=3000
 ```
 
-`GEMINI_API_KEY` and `GEMINI_MODEL` are required for live generation. `GEMINI_TIMEOUT_MS` controls the Gemini request timeout and defaults to 60000 when omitted or invalid. The API key is sent only from the Express backend using the `x-goog-api-key` header and is never sent to browser code.
+`GEMINI_API_KEY` and `GEMINI_MODEL` are required for live generation. The API key is sent only from the Express backend using the `x-goog-api-key` header and is never sent to browser code.
 
 ## Running
 
@@ -49,19 +53,11 @@ Open:
 http://127.0.0.1:3000
 ```
 
-## Tests
-
-```bash
-npm test
-```
-
-The automated tests mock LLM responses and do not require a live API key.
-
 ## Need Catalogue
 
-The persistent editable need catalogue remains unchanged in Version 4. The frontend loads defaults from `public/default-needs.json`, autosaves edits in browser `localStorage` under `llm-smart-object-need-catalogue`, and keeps this catalogue separate from generated-result history.
+The persistent editable need catalogue remains unchanged in Version 5. The frontend loads defaults from `public/default-needs.json`, autosaves edits in browser `localStorage` under `llm-smart-object-need-catalogue`, and keeps this catalogue separate from generated-result history.
 
-Each need still has this structure:
+Each need still has:
 
 ```json
 {
@@ -78,73 +74,15 @@ Each need still has this structure:
 }
 ```
 
-The default catalogue contains twelve editable needs: `hunger`, `thirst`, `rest`, `comfort`, `entertainment`, `social`, `safety`, `curiosity`, `bladder`, `hygiene`, `physical_activity`, and `mental_activity`.
+The twelve defaults are `hunger`, `thirst`, `rest`, `comfort`, `entertainment`, `social`, `safety`, `curiosity`, `bladder`, `hygiene`, `physical_activity`, and `mental_activity`. Add, remove, reset, import, export, autosave, and calibration prompt context are preserved.
 
-Catalogue controls are unchanged:
-
-- `Add need`
-- `Reset to defaults`
-- `Export catalogue`
-- `Import catalogue`
-
-`localStorage` is tied to the browser origin and port. A catalogue saved at `http://127.0.0.1:3000` is separate from one saved at another host or port.
-
-## Calibration
-
-Weak and strong references are prompt context only. They help Gemini choose better advertisement weights by comparing each generated interaction against examples for that specific need. Definitions and calibration references are not copied into generated smart-object output.
-
-The generated advertisements remain:
-
-```json
-{
-  "need": "rest",
-  "weight": 0.6
-}
-```
-
-The generated-output schema still uses only `needs[].name` for the dynamic advertisement need enum.
-
-## Input Format
-
-The API endpoint is:
-
-```text
-POST /api/generate-smart-objects
-```
-
-Request body:
-
-```json
-{
-  "locationDescription": "A small living room",
-  "needs": [
-    {
-      "name": "rest",
-      "definition": "The urgency to recover from physical or mental fatigue.",
-      "weakReference": {
-        "example": "wall -> lean_against_wall",
-        "weight": 0.05
-      },
-      "strongReference": {
-        "example": "bed -> sleep",
-        "weight": 1.0
-      }
-    }
-  ]
-}
-```
-
-The server validates the full need structure, rejects unknown need fields, and preserves normalized calibration references for prompt construction.
-
-## Output Format
-
-Successful response:
+## Output Example
 
 ```json
 {
   "success": true,
   "data": {
-    "location": "A small living room",
+    "location": "A break room",
     "objects": [
       {
         "id": "sofa_01",
@@ -153,6 +91,8 @@ Successful response:
           "type": "limited",
           "slots": 3
         },
+        "stateFlags": [],
+        "resources": [],
         "interactions": [
           {
             "id": "sit_and_relax",
@@ -162,38 +102,79 @@ Successful response:
             "availability": {
               "type": "when_capacity_available"
             },
+            "requirements": [],
+            "effects": [],
             "advertisements": [
               {
                 "need": "rest",
                 "weight": 0.55
-              },
-              {
-                "need": "comfort",
-                "weight": 0.8
               }
             ]
           }
         ]
       },
       {
-        "id": "television_01",
-        "type": "television",
+        "id": "coffee_machine_01",
+        "type": "coffee_machine",
         "capacity": {
-          "type": "unlimited"
+          "type": "limited",
+          "slots": 1
         },
+        "stateFlags": [
+          {
+            "id": "powered_on",
+            "initial": true
+          },
+          {
+            "id": "operational",
+            "initial": true
+          }
+        ],
+        "resources": [
+          {
+            "id": "coffee_servings",
+            "initial": 20,
+            "maximum": 20
+          }
+        ],
         "interactions": [
           {
-            "id": "watch_television",
+            "id": "get_and_drink_coffee",
             "duration": {
-              "type": "continuous"
+              "type": "fixed",
+              "seconds": 60
             },
             "availability": {
-              "type": "always"
+              "type": "when_capacity_available"
             },
+            "requirements": [
+              {
+                "type": "state_equals",
+                "state": "powered_on",
+                "value": true
+              },
+              {
+                "type": "state_equals",
+                "state": "operational",
+                "value": true
+              },
+              {
+                "type": "resource_at_least",
+                "resource": "coffee_servings",
+                "amount": 1
+              }
+            ],
+            "effects": [
+              {
+                "type": "change_resource",
+                "resource": "coffee_servings",
+                "amount": -1
+              }
+            ],
             "advertisements": [
               {
-                "need": "entertainment",
-                "weight": 0.75
+                "need": "mental_activity",
+                "weight": 0.15
               }
             ]
           }
@@ -204,103 +185,85 @@ Successful response:
 }
 ```
 
-Failure response:
+Generated advertisements remain only `{ "need": "...", "weight": ... }`. Need definitions and calibration references are prompt context only.
+
+## Capacity
+
+Capacity remains object-level. Every object has `capacity`, and all interactions on that object share the same capacity pool.
+
+- `limited` requires integer `slots` from `1` to `100`.
+- `unlimited` must omit `slots`.
+- Limited objects use interaction availability `when_capacity_available`.
+- Unlimited objects use interaction availability `always`.
+
+Capacity is static metadata. Runtime occupancy, current users, available slots, reservations, and queues are not generated or executed.
+
+## State Flags
+
+Every object has a `stateFlags` array. Empty arrays are valid and expected for ordinary passive objects.
+
+State declarations have:
 
 ```json
 {
-  "success": false,
-  "error": "Readable error message"
+  "id": "operational",
+  "initial": true
 }
 ```
 
-## Object Capacity
+Approved state IDs are exactly:
 
-Every object has exactly one `capacity` object. Capacity represents the number of NPCs that can simultaneously use one generated object instance.
+- `powered_on`
+- `operational`
+- `locked`
+- `open`
+- `clean`
 
-Capacity is shared across all interactions on the object. For example, a sofa with `slots: 3` and interactions `sit_and_relax` and `socialize_while_seated` has three total shared slots, not three slots per interaction. A future simulator would enforce runtime usage; Version 4 only generates static metadata.
+Each state ID must be unique within an object. Every declared state must be referenced by at least one requirement or effect on that object. Do not use state flags for occupancy, reservations, queues, capacity, NPC needs, NPC inventory, time, duration, or object count.
 
-Use `limited` when the object has a meaningful finite number of simultaneous users:
+## Finite Resources
+
+Every object has a `resources` array. Empty arrays are valid and expected for objects without finite stock.
+
+Resource declarations have:
 
 ```json
 {
-  "type": "limited",
-  "slots": 3
+  "id": "snack_units",
+  "initial": 12,
+  "maximum": 20
 }
 ```
 
-`slots` must be an integer from `1` to `100`.
+Resource IDs are lowercase identifiers. `initial` is an integer from `0` to `100000`, `maximum` is an integer from `1` to `100000`, and `initial` must not exceed `maximum`. Every declared resource must be referenced by at least one requirement or effect on that object.
 
-Use `unlimited` when the object does not require meaningful exclusive physical usage slots in this simplified simulation:
+Use resources only for finite object-side stock such as `coffee_servings`, `snack_units`, `paper_sheets`, `soap_uses`, `water_bottles`, or `clean_towels`. Do not use resources for capacity slots, current users, NPC money, NPC inventory, need values, time, health, or utility scores.
 
-```json
-{
-  "type": "unlimited"
-}
-```
+## Requirements
 
-Unlimited capacity must not contain `slots`.
+Every interaction has a `requirements` array. Requirements are object-side conditions for a future simulator. Empty arrays are valid.
 
-Each generated object entry represents one object instance. Several separate chairs should normally be generated as separate objects:
+Allowed requirement types:
 
-```text
-chair_01
-chair_02
-chair_03
-chair_04
-```
+- `state_equals`: references a declared state and Boolean value.
+- `resource_at_least`: references a declared resource and integer amount from `1` to `100000`.
 
-Each chair should have `limited` capacity with `slots: 1`. Do not create one `chair_01` with `slots: 4` merely because the room contains four separate chairs. A multi-person object such as one sofa, bench, dining table, or vehicle seat bank may legitimately have multiple slots.
+Requirements must reference declarations on the same object only. They must not depend on NPC role, personality, inventory, money, need urgency, time of day, weather, distance, pathfinding, occupancy, capacity slots, queue state, or another object.
 
-## Availability
+## Effects
 
-Every interaction has exactly one `availability` object. Version 4 allows exactly two values:
+Every interaction has an `effects` array. Effects are declarative object-side changes expected after successful completion. They are not executed by this generator.
 
-- `always`
-- `when_capacity_available`
+Allowed effect types:
 
-Capacity and availability must agree:
+- `set_state`: references a declared state and Boolean value.
+- `change_resource`: references a declared resource and a non-zero integer amount from `-100000` to `100000`.
 
-- `limited` capacity objects must use `when_capacity_available` on every interaction.
-- `unlimited` capacity objects must use `always` on every interaction.
-
-The old `when_free` value is no longer valid current-schema output. A former single-user `when_free` object is now a `limited` object with `slots: 1` and interaction availability `when_capacity_available`.
-
-## Duration Types
-
-Every interaction has exactly one `duration` object.
-
-Use `instant` when the interaction completes almost immediately and does not meaningfully occupy the NPC over simulation time:
-
-```json
-{
-  "type": "instant"
-}
-```
-
-Use `fixed` when the interaction has a natural completion point and an approximately predictable duration:
-
-```json
-{
-  "type": "fixed",
-  "seconds": 30
-}
-```
-
-Fixed interactions require `seconds`. `seconds` are approximate real-world seconds, must be greater than `0`, and must be no greater than `86400`.
-
-Use `continuous` when there is no predetermined completion time:
-
-```json
-{
-  "type": "continuous"
-}
-```
-
-Instant and continuous durations must not include `seconds`.
+Negative resource changes consume stock; positive changes replenish stock. Effects must not model need satisfaction, capacity, availability, occupancy, reservations, queues, scripts, or behavior logic.
 
 ## Validation
 
-Generated JSON is schema-validated and then checked with custom validation. The server rejects malformed JSON, unknown fields, object-level advertisements, unsupported need names, duplicate object IDs, duplicate interaction IDs within one object, duplicate advertisements within one interaction, empty interaction lists, empty advertisement lists, invalid interaction IDs, invalid durations, out-of-range weights, missing capacity, malformed capacity, unknown capacity types, invalid `slots`, unlimited capacity containing `slots`, capacity placed inside interactions, missing availability, malformed availability, old `when_free`, and capacity/availability mismatches.
+Generated JSON is schema-validated and then checked with custom validation. Validation rejects malformed JSON, unknown fields, invalid capacity, capacity/availability mismatches, old `when_free`, invalid duration, invalid IDs, duplicate IDs, unsupported need names, invalid weights, invalid or unused state declarations, invalid or unused resources, malformed requirements, malformed effects, undeclared local references, duplicate identical requirements/effects, and forbidden runtime/NPC/cross-object fields.
 
 The server asks the LLM for one focused repair attempt before returning a validation failure.
 
@@ -308,6 +271,14 @@ The server asks the LLM for one focused repair attempt before returning a valida
 
 - Gemini is the only live LLM provider in this version.
 - Recent successful generations and the need catalogue are stored separately in browser `localStorage`.
-- Older browser history entries may display as historical JSON, but they are not treated as validated against the current capacity schema.
+- Older browser history entries may display as historical JSON, but they are not treated as validated against the current Version 5 schema.
 - Validation rejects invalid generated content but does not semantically rewrite it in application code.
-- There is no runtime occupancy, current user tracking, reservations, queues, resources, stock, object state, powered state, locked state, operational state, animations, Behavior Trees, action sequences, behavior logic, utility execution, NPC runtime need bars, simulator execution, database, authentication, or cloud storage.
+- There is no simulator, runtime state engine, runtime resource engine, occupancy, reservations, queues, NPC conditions, planning, navigation, pathfinding, animations, Behavior Trees, executable code, utility execution, database, authentication, or cloud storage.
+
+## Tests
+
+```bash
+npm test
+```
+
+The automated tests mock LLM responses and do not require a live API key.

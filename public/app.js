@@ -228,12 +228,16 @@ function isCurrentInteractionOutput(data) {
       ? Number.isInteger(object.capacity.slots) && object.capacity.slots >= 1 && object.capacity.slots <= 100
       : object.capacity.type === "unlimited" && !Object.hasOwn(object.capacity, "slots")
     )
+    && Array.isArray(object.stateFlags)
+    && Array.isArray(object.resources)
     && Array.isArray(object.interactions)
     && object.interactions.every((interaction) => (
       interaction?.duration
       && typeof interaction.duration === "object"
       && interaction.availability
       && typeof interaction.availability === "object"
+      && Array.isArray(interaction.requirements)
+      && Array.isArray(interaction.effects)
       && (
         object.capacity.type === "limited"
           ? interaction.availability.type === "when_capacity_available"
@@ -471,7 +475,7 @@ downloadButton.addEventListener("click", () => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "smart-objects-with-capacity.json";
+  link.download = "smart-objects-with-state-and-resources.json";
   link.click();
   URL.revokeObjectURL(url);
 });

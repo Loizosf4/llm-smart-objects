@@ -13,7 +13,7 @@ export const smartObjectSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "type", "capacity", "interactions"],
+        required: ["id", "type", "capacity", "stateFlags", "resources", "interactions"],
         properties: {
           id: {
             type: "string",
@@ -39,13 +39,54 @@ export const smartObjectSchema = {
               }
             }
           },
+          stateFlags: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["id", "initial"],
+              properties: {
+                id: {
+                  type: "string",
+                  enum: ["powered_on", "operational", "locked", "open", "clean"]
+                },
+                initial: {
+                  type: "boolean"
+                }
+              }
+            }
+          },
+          resources: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["id", "initial", "maximum"],
+              properties: {
+                id: {
+                  type: "string",
+                  pattern: "^[a-z][a-z0-9_]*$"
+                },
+                initial: {
+                  type: "integer",
+                  minimum: 0,
+                  maximum: 100000
+                },
+                maximum: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 100000
+                }
+              }
+            }
+          },
           interactions: {
             type: "array",
             minItems: 1,
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["id", "duration", "availability", "advertisements"],
+              required: ["id", "duration", "availability", "requirements", "effects", "advertisements"],
               properties: {
                 id: {
                   type: "string",
@@ -75,6 +116,58 @@ export const smartObjectSchema = {
                     type: {
                       type: "string",
                       enum: ["always", "when_capacity_available"]
+                    }
+                  }
+                },
+                requirements: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["type"],
+                    properties: {
+                      type: {
+                        type: "string",
+                        enum: ["state_equals", "resource_at_least"]
+                      },
+                      state: {
+                        type: "string"
+                      },
+                      value: {
+                        type: "boolean"
+                      },
+                      resource: {
+                        type: "string"
+                      },
+                      amount: {
+                        type: "integer"
+                      }
+                    }
+                  }
+                },
+                effects: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    required: ["type"],
+                    properties: {
+                      type: {
+                        type: "string",
+                        enum: ["set_state", "change_resource"]
+                      },
+                      state: {
+                        type: "string"
+                      },
+                      value: {
+                        type: "boolean"
+                      },
+                      resource: {
+                        type: "string"
+                      },
+                      amount: {
+                        type: "integer"
+                      }
                     }
                   }
                 },

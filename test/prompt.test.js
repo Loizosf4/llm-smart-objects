@@ -79,6 +79,30 @@ test("prompt includes capacity and availability consistency rules", () => {
   assert.match(prompt, /Do not generate the old when_free availability value/);
 });
 
+test("prompt instructs use of empty arrays", () => {
+  const prompt = buildSmartObjectPrompt({ locationDescription: "staff room", needs });
+  assert.match(prompt, /Use empty arrays when no state, stock, requirement, or effect is needed/);
+  assert.match(prompt, /sofa -> no state flags -> no resources -> empty requirements -> empty effects/);
+});
+
+test("prompt warns against over-modelling", () => {
+  const prompt = buildSmartObjectPrompt({ locationDescription: "staff room", needs });
+  assert.match(prompt, /Avoid over-modelling simple objects/);
+  assert.match(prompt, /Do not give every electronic device all possible states/);
+});
+
+test("prompt forbids NPC-specific requirements", () => {
+  const prompt = buildSmartObjectPrompt({ locationDescription: "staff room", needs });
+  assert.match(prompt, /Requirements must be object-side only/);
+  assert.match(prompt, /NPC inventory, NPC money/);
+});
+
+test("prompt forbids runtime state execution", () => {
+  const prompt = buildSmartObjectPrompt({ locationDescription: "staff room", needs });
+  assert.match(prompt, /This generator does not execute them/);
+  assert.match(prompt, /Do not generate runtime state engine/);
+});
+
 test("repair prompt also includes calibration references", () => {
   const prompt = buildSmartObjectRepairPrompt({
     invalidOutput: "{}",
@@ -101,6 +125,18 @@ test("repair prompt includes capacity consistency rules", () => {
   assert.match(prompt, /Every object must contain a capacity object/);
   assert.match(prompt, /limited capacity -> when_capacity_available/);
   assert.match(prompt, /Unlimited capacity must omit slots/);
+});
+
+test("repair prompt includes declaration and reference rules", () => {
+  const prompt = buildSmartObjectRepairPrompt({
+    invalidOutput: "{}",
+    validationErrors: ["invalid"],
+    locationDescription: "staff room",
+    needs
+  });
+  assert.match(prompt, /Every object must contain stateFlags and resources arrays/);
+  assert.match(prompt, /Every declared state or resource must be referenced/);
+  assert.match(prompt, /Requirements and effects must reference declarations on the same parent object only/);
 });
 
 test("dynamic generated-output need enum still uses only need names", () => {
