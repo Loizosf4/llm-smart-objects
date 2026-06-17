@@ -97,10 +97,17 @@ input:focus {
 
 .section-heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin-top: 10px;
+}
+
+.catalogue-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
 }
 
 .needs-list {
@@ -110,13 +117,19 @@ input:focus {
 
 .need-row {
   display: grid;
-  grid-template-columns: minmax(120px, 0.35fr) minmax(180px, 1fr) auto;
+  grid-template-columns: minmax(120px, 0.65fr) minmax(220px, 1.35fr);
   gap: 10px;
   align-items: end;
   padding: 12px;
   border: 1px solid #d9dee7;
   border-radius: 8px;
   background: #fbfcfe;
+}
+
+.need-row label:nth-child(2),
+.need-row label:nth-child(3),
+.need-row label:nth-child(5) {
+  grid-column: 1 / -1;
 }
 
 .need-row label {
@@ -130,6 +143,7 @@ input:focus {
 .icon-button {
   width: 40px;
   height: 40px;
+  justify-self: end;
   border: 1px solid #c8d0dc;
   border-radius: 6px;
   background: #ffffff;
@@ -245,12 +259,19 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 
+  .need-row label:nth-child(2),
+  .need-row label:nth-child(3),
+  .need-row label:nth-child(5) {
+    grid-column: auto;
+  }
+
   .topbar,
   .result-toolbar {
     flex-direction: column;
   }
 
-  .toolbar-actions {
+  .toolbar-actions,
+  .catalogue-actions {
     justify-content: flex-start;
   }
 }

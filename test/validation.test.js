@@ -8,6 +8,29 @@ const needs = [
   { name: "thirst", definition: "The need to drink." }
 ];
 
+function requestNeed(overrides = {}) {
+  return {
+    name: "rest",
+    definition: "The urgency to recover from fatigue.",
+    weakReference: {
+      example: "wall -> lean_against_wall",
+      weight: 0.05
+    },
+    strongReference: {
+      example: "bed -> sleep",
+      weight: 1.0
+    },
+    ...overrides
+  };
+}
+
+function requestBody(needsOverride = [requestNeed()]) {
+  return {
+    locationDescription: "break room",
+    needs: needsOverride
+  };
+}
+
 function interaction(overrides = {}) {
   return {
     id: "sit_and_relax",
@@ -609,13 +632,154 @@ test("malformed JSON produces a controlled error", () => {
 });
 
 test("request with duplicate need definitions fails before the LLM call", () => {
-  const result = validateGenerationRequest({
-    locationDescription: "break room",
-    needs: [
-      { name: "rest", definition: "Recover." },
-      { name: "rest", definition: "Duplicate." }
-    ]
-  });
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({ definition: "Recover." }),
+    requestNeed({ definition: "Duplicate." })
+  ]));
   assert.equal(result.valid, false);
   assert.match(result.error, /Duplicate need name/);
+});
+
+test("valid need with both references passes request validation", () => {
+  const result = validateGenerationRequest(requestBody());
+  assert.equal(result.valid, true);
+});
+
+test("missing weak reference fails request validation", () => {
+  const { weakReference, ...need } = requestNeed();
+  const result = validateGenerationRequest(requestBody([need]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /missing a weak reference/);
+});
+
+test("missing weak example fails request validation", () => {
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({ weakReference: { weight: 0.05 } })
+  ]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /missing a weak reference example/);
+});
+
+test("missing weak weight fails request validation", () => {
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({ weakReference: { example: "wall -> lean_against_wall" } })
+  ]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /missing a weak reference weight/);
+});
+
+test("missing strong reference fails request validation", () => {
+  const { strongReference, ...need } = requestNeed();
+  const result = validateGenerationRequest(requestBody([need]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /missing a strong reference/);
+});
+
+test("missing strong example fails request validation", () => {
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({ strongReference: { weight: 1.0 } })
+  ]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /missing a strong reference example/);
+});
+
+test("missing strong weight fails request validation", () => {
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({ strongReference: { example: "bed -> sleep" } })
+  ]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /missing a strong reference weight/);
+});
+
+test("weak weight below zero fails request validation", () => {
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({ weakReference: { example: "wall -> lean_against_wall", weight: -0.01 } })
+  ]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /weak reference weight must be between 0 and 1/);
+});
+
+test("weak weight above one fails request validation", () => {
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({ weakReference: { example: "wall -> lean_against_wall", weight: 1.1 } })
+  ]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /weak reference weight must be between 0 and 1/);
+});
+
+test("strong weight below zero fails request validation", () => {
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({ strongReference: { example: "bed -> sleep", weight: -0.01 } })
+  ]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /strong reference weight must be between 0 and 1/);
+});
+
+test("strong weight above one fails request validation", () => {
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({ strongReference: { example: "bed -> sleep", weight: 1.1 } })
+  ]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /strong reference weight must be between 0 and 1/);
+});
+
+test("non-numeric reference weight fails request validation", () => {
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({ weakReference: { example: "wall -> lean_against_wall", weight: "0.05" } })
+  ]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /weak reference weight must be numeric/);
+});
+
+test("weak weight equal to strong weight fails request validation", () => {
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({
+      weakReference: { example: "wall -> lean_against_wall", weight: 1.0 }
+    })
+  ]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /weak reference weight must be lower/);
+});
+
+test("weak weight greater than strong weight fails request validation", () => {
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({
+      weakReference: { example: "wall -> lean_against_wall", weight: 0.8 },
+      strongReference: { example: "bed -> sleep", weight: 0.7 }
+    })
+  ]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /weak reference weight must be lower/);
+});
+
+test("unknown extra need fields fail request validation", () => {
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({ displayName: "Rest" })
+  ]));
+  assert.equal(result.valid, false);
+  assert.match(result.error, /unsupported field "displayName"/);
+});
+
+test("normalized request retains full reference structures", () => {
+  const result = validateGenerationRequest(requestBody([
+    requestNeed({
+      name: "rest",
+      definition: " Recover. ",
+      weakReference: { example: " wall -> lean_against_wall ", weight: 0.05 },
+      strongReference: { example: " bed -> sleep ", weight: 1.0 }
+    })
+  ]));
+  assert.equal(result.valid, true);
+  assert.deepEqual(result.value.needs[0], {
+    name: "rest",
+    definition: "Recover.",
+    weakReference: {
+      example: "wall -> lean_against_wall",
+      weight: 0.05
+    },
+    strongReference: {
+      example: "bed -> sleep",
+      weight: 1.0
+    }
+  });
 });

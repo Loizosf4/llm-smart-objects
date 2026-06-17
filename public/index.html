@@ -14,7 +14,6 @@
             <h1 id="app-title">LLM Smart Object Generator</h1>
             <p>Generate objects, interactions, duration, simple availability, need advertisements and weights.</p>
           </div>
-          <button class="secondary-button" id="add-need" type="button">Add need</button>
         </header>
 
         <form id="generator-form">
@@ -29,6 +28,13 @@
 
           <div class="section-heading">
             <h2>Needs</h2>
+            <div class="catalogue-actions">
+              <button class="secondary-button" id="add-need" type="button">Add need</button>
+              <button class="secondary-button" id="reset-needs" type="button">Reset to defaults</button>
+              <button class="secondary-button" id="export-needs" type="button">Export catalogue</button>
+              <button class="secondary-button" id="import-needs" type="button">Import catalogue</button>
+              <input id="import-needs-file" type="file" accept="application/json,.json" hidden>
+            </div>
           </div>
           <div id="needs-list" class="needs-list"></div>
 

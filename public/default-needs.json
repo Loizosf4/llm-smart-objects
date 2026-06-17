@@ -1,0 +1,146 @@
+[
+  {
+    "name": "hunger",
+    "definition": "The urgency to eat food and restore fullness. A higher internal value means the NPC is more hungry.",
+    "weakReference": {
+      "example": "small_snack -> eat_small_snack",
+      "weight": 0.25
+    },
+    "strongReference": {
+      "example": "full_meal -> eat_full_meal",
+      "weight": 1.0
+    }
+  },
+  {
+    "name": "thirst",
+    "definition": "The urgency to drink and restore hydration. A higher internal value means the NPC is more thirsty.",
+    "weakReference": {
+      "example": "water_source -> take_small_sip",
+      "weight": 0.15
+    },
+    "strongReference": {
+      "example": "glass_of_water -> drink_full_glass_of_water",
+      "weight": 1.0
+    }
+  },
+  {
+    "name": "rest",
+    "definition": "The urgency to recover from physical or mental fatigue.",
+    "weakReference": {
+      "example": "wall -> lean_against_wall",
+      "weight": 0.05
+    },
+    "strongReference": {
+      "example": "bed -> sleep",
+      "weight": 1.0
+    }
+  },
+  {
+    "name": "comfort",
+    "definition": "The urgency to improve physical ease, pleasantness, support, and shelter.",
+    "weakReference": {
+      "example": "hard_stool -> sit_on_hard_stool",
+      "weight": 0.2
+    },
+    "strongReference": {
+      "example": "comfortable_sofa -> relax_on_comfortable_sofa",
+      "weight": 1.0
+    }
+  },
+  {
+    "name": "entertainment",
+    "definition": "The urgency to reduce boredom through enjoyable or engaging activity.",
+    "weakReference": {
+      "example": "poster -> glance_at_poster",
+      "weight": 0.1
+    },
+    "strongReference": {
+      "example": "game_console -> play_engaging_game",
+      "weight": 1.0
+    }
+  },
+  {
+    "name": "social",
+    "definition": "The urgency to interact, communicate, or feel socially connected with other people.",
+    "weakReference": {
+      "example": "nearby_person -> briefly_greet_someone",
+      "weight": 0.1
+    },
+    "strongReference": {
+      "example": "conversation_area -> have_meaningful_conversation",
+      "weight": 1.0
+    }
+  },
+  {
+    "name": "safety",
+    "definition": "The urgency to reduce exposure to danger, uncertainty, or threatening environmental conditions.",
+    "weakReference": {
+      "example": "light_switch -> turn_on_light_in_dark_area",
+      "weight": 0.2
+    },
+    "strongReference": {
+      "example": "safe_shelter -> enter_and_secure_safe_shelter",
+      "weight": 1.0
+    }
+  },
+  {
+    "name": "curiosity",
+    "definition": "The urgency to discover, inspect, explore, or learn something new.",
+    "weakReference": {
+      "example": "notice_board -> glance_at_notice_board",
+      "weight": 0.1
+    },
+    "strongReference": {
+      "example": "interactive_exhibit -> deeply_explore_interactive_exhibit",
+      "weight": 1.0
+    }
+  },
+  {
+    "name": "bladder",
+    "definition": "The urgency to relieve bladder pressure by using a toilet. A value of 0 means no need to use the toilet, while a value of 1 means critically urgent.",
+    "weakReference": {
+      "example": "basic_portable_toilet -> use_portable_toilet",
+      "weight": 0.9
+    },
+    "strongReference": {
+      "example": "standard_toilet -> use_toilet",
+      "weight": 1.0
+    }
+  },
+  {
+    "name": "hygiene",
+    "definition": "The urgency to restore personal cleanliness, including washing, showering, brushing teeth, and similar care.",
+    "weakReference": {
+      "example": "sink -> wash_hands",
+      "weight": 0.2
+    },
+    "strongReference": {
+      "example": "shower -> take_thorough_shower",
+      "weight": 0.9
+    }
+  },
+  {
+    "name": "physical_activity",
+    "definition": "The urgency to move, stretch, walk, exercise, or otherwise use the body after inactivity.",
+    "weakReference": {
+      "example": "open_space -> stretch_briefly",
+      "weight": 0.15
+    },
+    "strongReference": {
+      "example": "exercise_equipment -> complete_full_workout",
+      "weight": 1.0
+    }
+  },
+  {
+    "name": "mental_activity",
+    "definition": "The urgency for cognitive stimulation through thinking, problem-solving, learning, planning, memory, or mentally challenging activity.",
+    "weakReference": {
+      "example": "simple_puzzle -> solve_simple_puzzle",
+      "weight": 0.15
+    },
+    "strongReference": {
+      "example": "complex_problem_station -> solve_complex_problem",
+      "weight": 1.0
+    }
+  }
+]

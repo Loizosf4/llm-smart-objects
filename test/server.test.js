@@ -2,6 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createApp } from "../server.js";
 
+function need(name, definition = `The need for ${name}.`) {
+  return {
+    name,
+    definition,
+    weakReference: {
+      example: `${name}_weak_object -> weak_${name}`,
+      weight: 0.1
+    },
+    strongReference: {
+      example: `${name}_strong_object -> strong_${name}`,
+      weight: 1.0
+    }
+  };
+}
+
 function listen(app) {
   return new Promise((resolve) => {
     const server = app.listen(0, () => resolve(server));
@@ -68,7 +83,7 @@ test("API repairs invalid first LLM output once", async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         locationDescription: "break room",
-        needs: [{ name: "thirst", definition: "The need to drink." }]
+        needs: [need("thirst", "The need to drink.")]
       })
     });
     const payload = await response.json();
@@ -121,8 +136,8 @@ test("API rejects duplicate need names before calling LLM", async () => {
       body: JSON.stringify({
         locationDescription: "break room",
         needs: [
-          { name: "rest", definition: "Recover." },
-          { name: "rest", definition: "Duplicate." }
+          need("rest", "Recover."),
+          need("rest", "Duplicate.")
         ]
       })
     });

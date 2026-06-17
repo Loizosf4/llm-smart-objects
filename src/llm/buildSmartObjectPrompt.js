@@ -1,7 +1,16 @@
 import { buildSmartObjectResponseSchema } from "../validation/smartObjectSchema.js";
 
 function formatNeeds(needs) {
-  return needs.map((need) => `- ${need.name}: ${need.definition}`).join("\n");
+  return needs.map((need) => [
+    `Need: ${need.name}`,
+    `Definition: ${need.definition}`,
+    "Weak calibration reference:",
+    `- interaction: ${need.weakReference.example}`,
+    `- weight: ${need.weakReference.weight}`,
+    "Strong calibration reference:",
+    `- interaction: ${need.strongReference.example}`,
+    `- weight: ${need.strongReference.weight}`
+  ].join("\n")).join("\n\n");
 }
 
 export function buildSmartObjectPrompt({ locationDescription, needs }) {
@@ -16,7 +25,7 @@ export function buildSmartObjectPrompt({ locationDescription, needs }) {
     "",
     `Location description: ${locationDescription}`,
     "",
-    "Allowed needs and definitions:",
+    "Allowed needs, definitions, and calibration references:",
     formatNeeds(needs),
     "",
     "Meaning of an interaction and advertisement:",
@@ -65,11 +74,21 @@ export function buildSmartObjectPrompt({ locationDescription, needs }) {
     "- notice board -> read_information -> always",
     "- large shared table -> socialize -> always",
     "",
-    "Weight anchors:",
-    "- 0.1-0.3: weakly satisfies the need",
-    "- 0.4-0.6: moderately satisfies the need",
-    "- 0.7-0.9: strongly satisfies the need",
-    "- 1.0: one of the strongest reasonable ways to satisfy the need",
+    "Need-specific weight calibration:",
+    "Calibration references define the approximate low and high ends for each specific need.",
+    "Compare each newly generated interaction against both references for that need and assign a proportional value based on relative strength.",
+    "Do not simply copy the weak or strong reference value. Values between the references are expected.",
+    "A generated interaction may reasonably be weaker than the weak reference or stronger than the strong reference only in exceptional cases.",
+    "Never exceed 1.0.",
+    "Do not generate a reference object merely because it appears in the calibration context.",
+    "The references are examples, not mandatory objects for the location.",
+    "Per-need calibration references are more important than the generic global weight bands.",
+    "Generic fallback scale:",
+    "- 0.01-0.19 = minimal effect",
+    "- 0.20-0.39 = weak effect",
+    "- 0.40-0.59 = moderate effect",
+    "- 0.60-0.79 = strong effect",
+    "- 0.80-1.00 = very strong effect",
     "Omit advertisements for needs the interaction does not reasonably help. Do not normally generate 0.0.",
     "",
     "Generation rules:",
@@ -126,8 +145,10 @@ export function buildSmartObjectRepairPrompt({ invalidOutput, validationErrors, 
     "",
     `Location description: ${locationDescription}`,
     "",
-    "Allowed needs and definitions:",
+    "Allowed needs, definitions, and calibration references:",
     formatNeeds(needs),
+    "",
+    "Use the weak and strong calibration references to repair advertisement weights. The references are examples only; do not automatically generate reference objects. Per-need calibration takes priority over the generic scale: 0.01-0.19 minimal, 0.20-0.39 weak, 0.40-0.59 moderate, 0.60-0.79 strong, 0.80-1.00 very strong.",
     "",
     "Validation errors:",
     validationErrors.map((error) => `- ${error}`).join("\n"),

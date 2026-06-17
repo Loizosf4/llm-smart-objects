@@ -1,11 +1,9 @@
-const defaultNeeds = [
-  { name: "hunger", definition: "The need to obtain food or a complete eating opportunity." },
-  { name: "thirst", definition: "The need to drink and restore hydration." },
-  { name: "rest", definition: "The need to recover from physical or mental tiredness." },
-  { name: "comfort", definition: "The need to feel physically at ease and sheltered." },
-  { name: "entertainment", definition: "The need to reduce boredom through enjoyable activity." },
-  { name: "social", definition: "The need to interact with or be near other people." }
-];
+import {
+  CATALOGUE_STORAGE_KEY,
+  createEmptyNeed,
+  parseCatalogueJson,
+  validateNeedCatalogue
+} from "./needCatalogue.js";
 
 const historyKey = "llm-smart-object-history";
 
@@ -13,6 +11,10 @@ const form = document.querySelector("#generator-form");
 const locationInput = document.querySelector("#location-description");
 const needsList = document.querySelector("#needs-list");
 const addNeedButton = document.querySelector("#add-need");
+const resetNeedsButton = document.querySelector("#reset-needs");
+const exportNeedsButton = document.querySelector("#export-needs");
+const importNeedsButton = document.querySelector("#import-needs");
+const importNeedsFile = document.querySelector("#import-needs-file");
 const generateButton = document.querySelector("#generate-button");
 const buttonLabel = document.querySelector("#button-label");
 const errorBox = document.querySelector("#error-box");
@@ -25,6 +27,8 @@ const clearButton = document.querySelector("#clear-result");
 const historyList = document.querySelector("#history-list");
 
 let currentJson = "";
+let saveTimer = 0;
+let suppressAutosave = false;
 
 function setError(message) {
   errorBox.textContent = message;
@@ -41,25 +45,49 @@ function setLoading(isLoading) {
   buttonLabel.textContent = isLoading ? "Generating..." : "Generate smart objects";
 }
 
-function renderNeedRow(need = { name: "", definition: "" }) {
+function createTextInput(className, value, placeholder = "") {
+  const input = document.createElement("input");
+  input.className = className;
+  input.value = value ?? "";
+  input.placeholder = placeholder;
+  return input;
+}
+
+function createWeightInput(className, value) {
+  const input = createTextInput(className, value ?? "");
+  input.type = "number";
+  input.min = "0";
+  input.max = "1";
+  input.step = "0.01";
+  return input;
+}
+
+function createLabel(text, input) {
+  const label = document.createElement("label");
+  label.textContent = text;
+  label.append(input);
+  return label;
+}
+
+function normalizeNeedForEditor(need) {
+  return {
+    name: typeof need?.name === "string" ? need.name : "",
+    definition: typeof need?.definition === "string" ? need.definition : "",
+    weakReference: {
+      example: typeof need?.weakReference?.example === "string" ? need.weakReference.example : "",
+      weight: typeof need?.weakReference?.weight === "number" ? need.weakReference.weight : 0.1
+    },
+    strongReference: {
+      example: typeof need?.strongReference?.example === "string" ? need.strongReference.example : "",
+      weight: typeof need?.strongReference?.weight === "number" ? need.strongReference.weight : 1.0
+    }
+  };
+}
+
+function renderNeedRow(need = createEmptyNeed()) {
+  const normalized = normalizeNeedForEditor(need);
   const row = document.createElement("div");
   row.className = "need-row";
-
-  const nameLabel = document.createElement("label");
-  nameLabel.textContent = "Name";
-  const nameInput = document.createElement("input");
-  nameInput.className = "need-name";
-  nameInput.value = need.name;
-  nameInput.placeholder = "rest";
-  nameLabel.append(nameInput);
-
-  const definitionLabel = document.createElement("label");
-  definitionLabel.textContent = "Definition";
-  const definitionInput = document.createElement("input");
-  definitionInput.className = "need-definition";
-  definitionInput.value = need.definition;
-  definitionInput.placeholder = "The need to recover from tiredness.";
-  definitionLabel.append(definitionInput);
 
   const removeButton = document.createElement("button");
   removeButton.className = "icon-button";
@@ -67,16 +95,48 @@ function renderNeedRow(need = { name: "", definition: "" }) {
   removeButton.title = "Remove need";
   removeButton.setAttribute("aria-label", "Remove need");
   removeButton.textContent = "x";
-  removeButton.addEventListener("click", () => row.remove());
+  removeButton.addEventListener("click", () => {
+    row.remove();
+    saveCatalogueSoon();
+  });
 
-  row.append(nameLabel, definitionLabel, removeButton);
+  row.append(
+    createLabel("Name", createTextInput("need-name", normalized.name, "rest")),
+    createLabel("Definition", createTextInput("need-definition", normalized.definition, "The urgency to recover from fatigue.")),
+    createLabel("Weak reference interaction", createTextInput("need-weak-example", normalized.weakReference.example, "wall -> lean_against_wall")),
+    createLabel("Weak reference weight", createWeightInput("need-weak-weight", normalized.weakReference.weight)),
+    createLabel("Strong reference interaction", createTextInput("need-strong-example", normalized.strongReference.example, "bed -> sleep")),
+    createLabel("Strong reference weight", createWeightInput("need-strong-weight", normalized.strongReference.weight)),
+    removeButton
+  );
+
   needsList.append(row);
+}
+
+function renderCatalogue(needs) {
+  suppressAutosave = true;
+  needsList.textContent = "";
+  needs.forEach(renderNeedRow);
+  suppressAutosave = false;
+}
+
+function readWeight(row, selector) {
+  const value = row.querySelector(selector).value.trim();
+  return value === "" ? Number.NaN : Number(value);
 }
 
 function collectNeeds() {
   return [...needsList.querySelectorAll(".need-row")].map((row) => ({
     name: row.querySelector(".need-name").value.trim(),
-    definition: row.querySelector(".need-definition").value.trim()
+    definition: row.querySelector(".need-definition").value.trim(),
+    weakReference: {
+      example: row.querySelector(".need-weak-example").value.trim(),
+      weight: readWeight(row, ".need-weak-weight")
+    },
+    strongReference: {
+      example: row.querySelector(".need-strong-example").value.trim(),
+      weight: readWeight(row, ".need-strong-weight")
+    }
   }));
 }
 
@@ -85,30 +145,78 @@ function validateClientInput(locationDescription, needs) {
     return "Location description is required.";
   }
 
-  if (needs.length === 0) {
-    return "At least one need is required.";
+  const validation = validateNeedCatalogue(needs);
+  return validation.valid ? "" : validation.error;
+}
+
+function saveCatalogue() {
+  if (suppressAutosave) {
+    return;
   }
 
-  const seen = new Set();
-  const pattern = /^[a-z][a-z0-9_]*$/;
+  localStorage.setItem(CATALOGUE_STORAGE_KEY, JSON.stringify(collectNeeds()));
+}
 
-  for (const [index, need] of needs.entries()) {
-    if (!need.name) {
-      return `Need ${index + 1} is missing a name.`;
-    }
-    if (!pattern.test(need.name)) {
-      return `Need "${need.name}" must be a lowercase identifier using letters, numbers, and underscores.`;
-    }
-    if (!need.definition) {
-      return `Need "${need.name}" is missing a definition.`;
-    }
-    if (seen.has(need.name)) {
-      return `Duplicate need name "${need.name}".`;
-    }
-    seen.add(need.name);
+function saveCatalogueSoon() {
+  if (suppressAutosave) {
+    return;
   }
 
-  return "";
+  window.clearTimeout(saveTimer);
+  saveTimer = window.setTimeout(saveCatalogue, 150);
+}
+
+async function loadDefaultCatalogue() {
+  const response = await fetch("/default-needs.json", { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error("Default need catalogue could not be loaded.");
+  }
+
+  const data = await response.json();
+  const validation = validateNeedCatalogue(data);
+  if (!validation.valid) {
+    throw new Error(`Default need catalogue is invalid: ${validation.error}`);
+  }
+
+  return validation.needs;
+}
+
+function loadSavedCatalogue() {
+  const saved = localStorage.getItem(CATALOGUE_STORAGE_KEY);
+  if (!saved) {
+    return null;
+  }
+
+  const parsed = parseCatalogueJson(saved);
+  if (!parsed.valid) {
+    return null;
+  }
+
+  if (!Array.isArray(parsed.data) || parsed.data.length === 0) {
+    return null;
+  }
+
+  if (!parsed.data.every((need) => need && typeof need === "object" && !Array.isArray(need))) {
+    return null;
+  }
+
+  return parsed.data.map(normalizeNeedForEditor);
+}
+
+async function initializeCatalogue() {
+  const saved = loadSavedCatalogue();
+  if (saved) {
+    renderCatalogue(saved);
+    return;
+  }
+
+  try {
+    const defaults = await loadDefaultCatalogue();
+    renderCatalogue(defaults);
+  } catch (error) {
+    renderCatalogue([createEmptyNeed()]);
+    setError(error instanceof Error ? error.message : "Need catalogue could not be loaded.");
+  }
 }
 
 function isCurrentInteractionOutput(data) {
@@ -185,17 +293,13 @@ function renderHistory() {
     openButton.textContent = "Open";
     openButton.addEventListener("click", () => {
       locationInput.value = item.locationDescription;
-      needsList.textContent = "";
-      if (Array.isArray(item.needs)) {
-        item.needs.forEach(renderNeedRow);
-      }
       if (isCurrentInteractionOutput(item.generatedJson)) {
         showJson(item.generatedJson);
       } else {
         showJson(item.generatedJson, "Loaded historical JSON from an older schema; not validated against the current availability schema.");
       }
       setError("");
-      setStatus("Loaded a previous successful generation.");
+      setStatus("Loaded a previous successful generation. The current saved need catalogue was not changed.");
     });
 
     const deleteButton = document.createElement("button");
@@ -214,7 +318,82 @@ function renderHistory() {
   }
 }
 
-addNeedButton.addEventListener("click", () => renderNeedRow());
+function downloadJson(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+addNeedButton.addEventListener("click", () => {
+  renderNeedRow(createEmptyNeed());
+  saveCatalogueSoon();
+});
+
+needsList.addEventListener("input", saveCatalogueSoon);
+needsList.addEventListener("change", saveCatalogueSoon);
+
+resetNeedsButton.addEventListener("click", async () => {
+  if (!window.confirm("Reset the need catalogue to defaults? Current need edits will be replaced.")) {
+    return;
+  }
+
+  try {
+    const defaults = await loadDefaultCatalogue();
+    localStorage.setItem(CATALOGUE_STORAGE_KEY, JSON.stringify(defaults));
+    renderCatalogue(defaults);
+    setError("");
+    setStatus("Need catalogue reset to defaults.");
+  } catch (error) {
+    setError(error instanceof Error ? error.message : "Need catalogue could not be reset.");
+  }
+});
+
+exportNeedsButton.addEventListener("click", () => {
+  const validation = validateNeedCatalogue(collectNeeds());
+  if (!validation.valid) {
+    setError(validation.error);
+    return;
+  }
+
+  downloadJson(validation.needs, "need-catalogue.json");
+  setError("");
+  setStatus("Need catalogue exported.");
+});
+
+importNeedsButton.addEventListener("click", () => {
+  importNeedsFile.click();
+});
+
+importNeedsFile.addEventListener("change", async () => {
+  const file = importNeedsFile.files?.[0];
+  importNeedsFile.value = "";
+  if (!file) {
+    return;
+  }
+
+  try {
+    const parsed = parseCatalogueJson(await file.text());
+    if (!parsed.valid) {
+      throw new Error(parsed.error);
+    }
+
+    const validation = validateNeedCatalogue(parsed.data);
+    if (!validation.valid) {
+      throw new Error(validation.error);
+    }
+
+    localStorage.setItem(CATALOGUE_STORAGE_KEY, JSON.stringify(validation.needs));
+    renderCatalogue(validation.needs);
+    setError("");
+    setStatus("Need catalogue imported.");
+  } catch (error) {
+    setError(error instanceof Error ? error.message : "Need catalogue import failed.");
+  }
+});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -230,6 +409,8 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  const normalizedNeeds = validateNeedCatalogue(needs).needs;
+
   setLoading(true);
   setStatus("Generating and validating JSON...");
 
@@ -237,7 +418,7 @@ form.addEventListener("submit", async (event) => {
     const response = await fetch("/api/generate-smart-objects", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ locationDescription, needs })
+      body: JSON.stringify({ locationDescription, needs: normalizedNeeds })
     });
 
     const payload = await response.json();
@@ -249,7 +430,7 @@ form.addEventListener("submit", async (event) => {
     saveHistory({
       timestamp: new Date().toISOString(),
       locationDescription,
-      needs,
+      needs: normalizedNeeds,
       generatedJson: payload.data
     });
     setStatus("Generation completed and schema validation passed.");
@@ -289,5 +470,5 @@ clearButton.addEventListener("click", () => {
   setError("");
 });
 
-defaultNeeds.forEach(renderNeedRow);
+initializeCatalogue();
 renderHistory();
