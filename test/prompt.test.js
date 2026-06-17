@@ -60,6 +60,25 @@ test("prompt includes the new generic weight bands", () => {
   assert.match(prompt, /0\.80-1\.00 = very strong effect/);
 });
 
+test("prompt includes the object-instance rule", () => {
+  const prompt = buildSmartObjectPrompt({ locationDescription: "staff room", needs });
+  assert.match(prompt, /Each generated object entry represents one object instance/);
+  assert.match(prompt, /chair_01 is one chair, chair_02 is a second chair/);
+});
+
+test("prompt distinguishes object capacity from object count", () => {
+  const prompt = buildSmartObjectPrompt({ locationDescription: "staff room", needs });
+  assert.match(prompt, /Capacity does not represent the number of object copies/);
+  assert.match(prompt, /Do not create chair_01 with slots 5/);
+});
+
+test("prompt includes capacity and availability consistency rules", () => {
+  const prompt = buildSmartObjectPrompt({ locationDescription: "staff room", needs });
+  assert.match(prompt, /limited capacity -> when_capacity_available/);
+  assert.match(prompt, /unlimited capacity -> always/);
+  assert.match(prompt, /Do not generate the old when_free availability value/);
+});
+
 test("repair prompt also includes calibration references", () => {
   const prompt = buildSmartObjectRepairPrompt({
     invalidOutput: "{}",
@@ -70,6 +89,18 @@ test("repair prompt also includes calibration references", () => {
   assert.match(prompt, /Weak calibration reference:\n- interaction: sink -> wash_hands/);
   assert.match(prompt, /Strong calibration reference:\n- interaction: shower -> take_thorough_shower/);
   assert.match(prompt, /references are examples only/);
+});
+
+test("repair prompt includes capacity consistency rules", () => {
+  const prompt = buildSmartObjectRepairPrompt({
+    invalidOutput: "{}",
+    validationErrors: ["invalid"],
+    locationDescription: "staff room",
+    needs
+  });
+  assert.match(prompt, /Every object must contain a capacity object/);
+  assert.match(prompt, /limited capacity -> when_capacity_available/);
+  assert.match(prompt, /Unlimited capacity must omit slots/);
 });
 
 test("dynamic generated-output need enum still uses only need names", () => {

@@ -13,7 +13,7 @@ export const smartObjectSchema = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "type", "interactions"],
+        required: ["id", "type", "capacity", "interactions"],
         properties: {
           id: {
             type: "string",
@@ -22,6 +22,22 @@ export const smartObjectSchema = {
           type: {
             type: "string",
             minLength: 1
+          },
+          capacity: {
+            type: "object",
+            additionalProperties: false,
+            required: ["type"],
+            properties: {
+              type: {
+                type: "string",
+                enum: ["limited", "unlimited"]
+              },
+              slots: {
+                type: "integer",
+                minimum: 1,
+                maximum: 100
+              }
+            }
           },
           interactions: {
             type: "array",
@@ -58,7 +74,7 @@ export const smartObjectSchema = {
                   properties: {
                     type: {
                       type: "string",
-                      enum: ["always", "when_free"]
+                      enum: ["always", "when_capacity_available"]
                     }
                   }
                 },

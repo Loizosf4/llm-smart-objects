@@ -221,12 +221,24 @@ async function initializeCatalogue() {
 
 function isCurrentInteractionOutput(data) {
   return Boolean(data?.objects?.every((object) => (
-    Array.isArray(object.interactions)
+    object?.capacity
+    && typeof object.capacity === "object"
+    && (
+      object.capacity.type === "limited"
+      ? Number.isInteger(object.capacity.slots) && object.capacity.slots >= 1 && object.capacity.slots <= 100
+      : object.capacity.type === "unlimited" && !Object.hasOwn(object.capacity, "slots")
+    )
+    && Array.isArray(object.interactions)
     && object.interactions.every((interaction) => (
       interaction?.duration
       && typeof interaction.duration === "object"
       && interaction.availability
       && typeof interaction.availability === "object"
+      && (
+        object.capacity.type === "limited"
+          ? interaction.availability.type === "when_capacity_available"
+          : interaction.availability.type === "always"
+      )
     ))
   )));
 }
@@ -296,7 +308,7 @@ function renderHistory() {
       if (isCurrentInteractionOutput(item.generatedJson)) {
         showJson(item.generatedJson);
       } else {
-        showJson(item.generatedJson, "Loaded historical JSON from an older schema; not validated against the current availability schema.");
+        showJson(item.generatedJson, "Loaded historical JSON from an older schema; not validated against the current capacity schema.");
       }
       setError("");
       setStatus("Loaded a previous successful generation. The current saved need catalogue was not changed.");
@@ -459,7 +471,7 @@ downloadButton.addEventListener("click", () => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "smart-objects-with-availability.json";
+  link.download = "smart-objects-with-capacity.json";
   link.click();
   URL.revokeObjectURL(url);
 });

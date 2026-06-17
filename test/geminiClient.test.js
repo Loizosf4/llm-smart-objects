@@ -41,7 +41,7 @@ test("Gemini request uses API key header and keeps key out of URL", async (t) =>
         candidates: [
           {
             content: {
-              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"interactions\":[{\"id\":\"sit_and_relax\",\"duration\":{\"type\":\"continuous\"},\"availability\":{\"type\":\"always\"},\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
+              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"capacity\":{\"type\":\"limited\",\"slots\":3},\"interactions\":[{\"id\":\"sit_and_relax\",\"duration\":{\"type\":\"continuous\"},\"availability\":{\"type\":\"when_capacity_available\"},\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
             }
           }
         ]
@@ -70,7 +70,7 @@ test("Gemini request contains structured output config with need enum", async (t
         candidates: [
           {
             content: {
-              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"interactions\":[{\"id\":\"sit_and_relax\",\"duration\":{\"type\":\"continuous\"},\"availability\":{\"type\":\"always\"},\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
+              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"capacity\":{\"type\":\"limited\",\"slots\":3},\"interactions\":[{\"id\":\"sit_and_relax\",\"duration\":{\"type\":\"continuous\"},\"availability\":{\"type\":\"when_capacity_available\"},\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
             }
           }
         ]
@@ -84,6 +84,16 @@ test("Gemini request contains structured output config with need enum", async (t
   assert.equal(capturedBody.generationConfig.responseMimeType, "application/json");
   assert.equal("responseJsonSchema" in capturedBody.generationConfig, true);
   assert.equal("responseFormat" in capturedBody.generationConfig, false);
+  assert.deepEqual(
+    capturedBody.generationConfig.responseJsonSchema
+      .properties.objects.items.properties.capacity.properties.type.enum,
+    ["limited", "unlimited"]
+  );
+  assert.deepEqual(
+    capturedBody.generationConfig.responseJsonSchema
+      .properties.objects.items.required,
+    ["id", "type", "capacity", "interactions"]
+  );
   assert.deepEqual(
     capturedBody.generationConfig.responseJsonSchema
       .properties.objects.items.properties.interactions.items
@@ -100,7 +110,7 @@ test("Gemini request contains structured output config with need enum", async (t
     capturedBody.generationConfig.responseJsonSchema
       .properties.objects.items.properties.interactions.items
       .properties.availability.properties.type.enum,
-    ["always", "when_free"]
+    ["always", "when_capacity_available"]
   );
   assert.deepEqual(
     capturedBody.generationConfig.responseJsonSchema

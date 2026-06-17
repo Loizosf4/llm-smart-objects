@@ -1,19 +1,20 @@
 # LLM Smart Object Generator
 
-An experimental environment-first generator for manually inspecting smart-object JSON. Version 3 generates objects, interactions, duration, simple interaction availability, need advertisements, and weights. This upgrade improves the input need catalogue and per-need weight calibration without changing the generated smart-object JSON.
+An experimental environment-first generator for manually inspecting smart-object JSON. Version 4 tests whether an LLM can assign plausible simultaneous-user capacities to generated environmental objects and distinguish finite-capacity objects from interactions that do not require meaningful exclusive usage slots.
 
-The generated structure remains:
+The generated structure is:
 
 ```text
 Object
+-> Capacity
 -> Interactions
    -> Duration
-   -> Availability
+   -> Capacity-aware availability
    -> Advertised needs
    -> Weights
 ```
 
-This remains a JSON-generation experiment. It does not include simulator execution, capacity, occupancy tracking, reservations, queues, resources, object state, animations, Behavior Trees, utility-system generation, NPC runtime need bars, databases, authentication, cloud storage, or Version 4 smart-object features.
+This remains a JSON-generation experiment. Version 4 adds only static object capacity and capacity-aware availability. It does not include runtime occupancy, reservations, queues, resources, object state, animations, Behavior Trees, utility execution, simulator code, databases, authentication, or cloud storage.
 
 ## Installation
 
@@ -58,9 +59,9 @@ The automated tests mock LLM responses and do not require a live API key.
 
 ## Need Catalogue
 
-The frontend loads the editable default need catalogue from `public/default-needs.json`. User edits are autosaved in browser `localStorage` under `llm-smart-object-need-catalogue`, separate from generated-result history.
+The persistent editable need catalogue remains unchanged in Version 4. The frontend loads defaults from `public/default-needs.json`, autosaves edits in browser `localStorage` under `llm-smart-object-need-catalogue`, and keeps this catalogue separate from generated-result history.
 
-Each need has this structure:
+Each need still has this structure:
 
 ```json
 {
@@ -77,38 +78,22 @@ Each need has this structure:
 }
 ```
 
-Need names must be unique lowercase identifiers using letters, numbers, and underscores. Reference examples are complete object-to-interaction examples. Reference weights must be numbers from `0.0` to `1.0`, and the weak reference weight must be lower than the strong reference weight.
+The default catalogue contains twelve editable needs: `hunger`, `thirst`, `rest`, `comfort`, `entertainment`, `social`, `safety`, `curiosity`, `bladder`, `hygiene`, `physical_activity`, and `mental_activity`.
 
-The default catalogue contains twelve editable needs:
+Catalogue controls are unchanged:
 
-- `hunger`
-- `thirst`
-- `rest`
-- `comfort`
-- `entertainment`
-- `social`
-- `safety`
-- `curiosity`
-- `bladder`
-- `hygiene`
-- `physical_activity`
-- `mental_activity`
+- `Add need`
+- `Reset to defaults`
+- `Export catalogue`
+- `Import catalogue`
 
-All needs use the same urgency convention: `0.0` means no urgency and `1.0` means critical urgency. Bladder is not reversed internally; a toilet interaction reduces bladder urgency, but its advertisement weight remains positive.
+`localStorage` is tied to the browser origin and port. A catalogue saved at `http://127.0.0.1:3000` is separate from one saved at another host or port.
 
 ## Calibration
 
-Weak and strong references are prompt context only. They help Gemini choose better advertisement weights by comparing each generated interaction against examples for that specific need.
+Weak and strong references are prompt context only. They help Gemini choose better advertisement weights by comparing each generated interaction against examples for that specific need. Definitions and calibration references are not copied into generated smart-object output.
 
-Per-need calibration references take priority over the generic fallback bands:
-
-- `0.01-0.19`: minimal effect
-- `0.20-0.39`: weak effect
-- `0.40-0.59`: moderate effect
-- `0.60-0.79`: strong effect
-- `0.80-1.00`: very strong effect
-
-The generated advertisements remain unchanged and contain only the need name and weight:
+The generated advertisements remain:
 
 ```json
 {
@@ -117,20 +102,7 @@ The generated advertisements remain unchanged and contain only the need name and
 }
 ```
 
-Definitions and calibration references are not copied into generated smart-object output.
-
-## Catalogue Persistence
-
-The catalogue autosaves whenever a need is edited, added, or removed. On page load, the browser attempts to restore the saved catalogue. If saved data is missing or corrupt, the app loads `public/default-needs.json`.
-
-Catalogue controls:
-
-- `Add need` creates a blank editable need with default weak and strong weights.
-- `Reset to defaults` confirms, reloads `default-needs.json`, saves it to `localStorage`, and re-renders the editor.
-- `Export catalogue` validates and downloads `need-catalogue.json` with all fields.
-- `Import catalogue` validates a local JSON file and replaces the current catalogue only if the whole file is valid.
-
-`localStorage` is tied to the browser origin and port. A catalogue saved at `http://127.0.0.1:3000` is separate from one saved at another host or port.
+The generated-output schema still uses only `needs[].name` for the dynamic advertisement need enum.
 
 ## Input Format
 
@@ -162,7 +134,7 @@ Request body:
 }
 ```
 
-The server validates the full need structure, rejects unknown need fields, and preserves the normalized calibration references for prompt construction. The generated-output schema still uses only `needs[].name` for the dynamic advertisement need enum.
+The server validates the full need structure, rejects unknown need fields, and preserves normalized calibration references for prompt construction.
 
 ## Output Format
 
@@ -176,10 +148,42 @@ Successful response:
     "objects": [
       {
         "id": "sofa_01",
-        "type": "sofa",
+        "type": "three_seat_sofa",
+        "capacity": {
+          "type": "limited",
+          "slots": 3
+        },
         "interactions": [
           {
             "id": "sit_and_relax",
+            "duration": {
+              "type": "continuous"
+            },
+            "availability": {
+              "type": "when_capacity_available"
+            },
+            "advertisements": [
+              {
+                "need": "rest",
+                "weight": 0.55
+              },
+              {
+                "need": "comfort",
+                "weight": 0.8
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "television_01",
+        "type": "television",
+        "capacity": {
+          "type": "unlimited"
+        },
+        "interactions": [
+          {
+            "id": "watch_television",
             "duration": {
               "type": "continuous"
             },
@@ -188,12 +192,8 @@ Successful response:
             },
             "advertisements": [
               {
-                "need": "rest",
-                "weight": 0.6
-              },
-              {
-                "need": "comfort",
-                "weight": 0.7
+                "need": "entertainment",
+                "weight": 0.75
               }
             ]
           }
@@ -213,7 +213,57 @@ Failure response:
 }
 ```
 
-Generated JSON is schema-validated. Unknown fields, object-level advertisements, unsupported need names, duplicate object IDs, duplicate interaction IDs within one object, duplicate advertisements within one interaction, malformed JSON, empty interaction lists, empty advertisement lists, missing duration, invalid duration types, invalid fixed seconds, seconds on instant or continuous durations, invalid interaction IDs, out-of-range weights, missing availability, malformed availability, unknown availability types, extra availability fields, capacity fields, and runtime fields such as `occupied`, `current_users`, or `reserved_by` are rejected. The server asks the LLM for one focused repair attempt before returning a validation failure.
+## Object Capacity
+
+Every object has exactly one `capacity` object. Capacity represents the number of NPCs that can simultaneously use one generated object instance.
+
+Capacity is shared across all interactions on the object. For example, a sofa with `slots: 3` and interactions `sit_and_relax` and `socialize_while_seated` has three total shared slots, not three slots per interaction. A future simulator would enforce runtime usage; Version 4 only generates static metadata.
+
+Use `limited` when the object has a meaningful finite number of simultaneous users:
+
+```json
+{
+  "type": "limited",
+  "slots": 3
+}
+```
+
+`slots` must be an integer from `1` to `100`.
+
+Use `unlimited` when the object does not require meaningful exclusive physical usage slots in this simplified simulation:
+
+```json
+{
+  "type": "unlimited"
+}
+```
+
+Unlimited capacity must not contain `slots`.
+
+Each generated object entry represents one object instance. Several separate chairs should normally be generated as separate objects:
+
+```text
+chair_01
+chair_02
+chair_03
+chair_04
+```
+
+Each chair should have `limited` capacity with `slots: 1`. Do not create one `chair_01` with `slots: 4` merely because the room contains four separate chairs. A multi-person object such as one sofa, bench, dining table, or vehicle seat bank may legitimately have multiple slots.
+
+## Availability
+
+Every interaction has exactly one `availability` object. Version 4 allows exactly two values:
+
+- `always`
+- `when_capacity_available`
+
+Capacity and availability must agree:
+
+- `limited` capacity objects must use `when_capacity_available` on every interaction.
+- `unlimited` capacity objects must use `always` on every interaction.
+
+The old `when_free` value is no longer valid current-schema output. A former single-user `when_free` object is now a `limited` object with `slots: 1` and interaction availability `when_capacity_available`.
 
 ## Duration Types
 
@@ -248,32 +298,16 @@ Use `continuous` when there is no predetermined completion time:
 
 Instant and continuous durations must not include `seconds`.
 
-## Availability
+## Validation
 
-Every interaction has exactly one `availability` object. Availability is a static object-side advertisement rule attached to the interaction.
+Generated JSON is schema-validated and then checked with custom validation. The server rejects malformed JSON, unknown fields, object-level advertisements, unsupported need names, duplicate object IDs, duplicate interaction IDs within one object, duplicate advertisements within one interaction, empty interaction lists, empty advertisement lists, invalid interaction IDs, invalid durations, out-of-range weights, missing capacity, malformed capacity, unknown capacity types, invalid `slots`, unlimited capacity containing `slots`, capacity placed inside interactions, missing availability, malformed availability, old `when_free`, and capacity/availability mismatches.
 
-Use `always` when the interaction does not need exclusive control of the object in this simplified version:
-
-```json
-{
-  "type": "always"
-}
-```
-
-Use `when_free` when only one NPC should use the interaction at a time:
-
-```json
-{
-  "type": "when_free"
-}
-```
-
-The generated JSON contains only this static rule. A future simulator would maintain actual runtime usage. This version does not contain capacity, seat counts, user limits, available-slot counts, occupancy counts, reservations, or queues. Shared objects such as a large sofa, communal table, television, or notice board temporarily use `always`.
+The server asks the LLM for one focused repair attempt before returning a validation failure.
 
 ## Current Limitations
 
 - Gemini is the only live LLM provider in this version.
 - Recent successful generations and the need catalogue are stored separately in browser `localStorage`.
-- Older browser history entries may display as historical JSON, but they are not treated as validated against the current availability schema.
+- Older browser history entries may display as historical JSON, but they are not treated as validated against the current capacity schema.
 - Validation rejects invalid generated content but does not semantically rewrite it in application code.
-- There is no capacity, seats, user limits, occupancy, runtime users, reservations, queues, resources, state, animation, Behavior Trees, utility calculations, NPC runtime need bars, simulator execution, database, authentication, or cloud storage.
+- There is no runtime occupancy, current user tracking, reservations, queues, resources, stock, object state, powered state, locked state, operational state, animations, Behavior Trees, action sequences, behavior logic, utility execution, NPC runtime need bars, simulator execution, database, authentication, or cloud storage.

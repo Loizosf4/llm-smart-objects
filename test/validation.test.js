@@ -35,7 +35,7 @@ function interaction(overrides = {}) {
   return {
     id: "sit_and_relax",
     duration: { type: "continuous" },
-    availability: { type: "always" },
+    availability: { type: "when_capacity_available" },
     advertisements: [{ need: "rest", weight: 0.6 }],
     ...overrides
   };
@@ -45,6 +45,7 @@ function object(overrides = {}) {
   return {
     id: "sofa_01",
     type: "sofa",
+    capacity: { type: "limited", slots: 3 },
     interactions: [interaction()],
     ...overrides
   };
@@ -63,10 +64,31 @@ test("valid continuous duration passes", () => {
   assert.equal(result.valid, true);
 });
 
-test("valid always availability passes", () => {
+test("valid limited capacity with one slot passes", () => {
   const result = validateSmartObjectOutput(output({
     objects: [
       object({
+        id: "single_chair_01",
+        type: "single_chair",
+        capacity: { type: "limited", slots: 1 }
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("valid limited capacity with multiple slots passes", () => {
+  const result = validateSmartObjectOutput(output(), needs);
+  assert.equal(result.valid, true);
+});
+
+test("valid unlimited capacity passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        id: "television_01",
+        type: "television",
+        capacity: { type: "unlimited" },
         interactions: [
           interaction({ availability: { type: "always" } })
         ]
@@ -76,12 +98,209 @@ test("valid always availability passes", () => {
   assert.equal(result.valid, true);
 });
 
-test("valid when_free availability passes", () => {
+test("old when_free availability fails", () => {
   const result = validateSmartObjectOutput(output({
     objects: [
       object({
         interactions: [
           interaction({ availability: { type: "when_free" } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /when_free/);
+});
+
+test("missing capacity fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      {
+        id: "sofa_01",
+        type: "sofa",
+        interactions: [interaction()]
+      }
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /missing capacity/);
+});
+
+test("capacity as a string fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({ capacity: "limited" })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must be an object/);
+});
+
+test("missing capacity type fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({ capacity: { slots: 3 } })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Capacity on object "sofa_01" is missing type/);
+});
+
+test("unknown capacity type fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({ capacity: { type: "shared", slots: 3 } })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unsupported capacity type "shared"/);
+});
+
+test("limited capacity without slots fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({ capacity: { type: "limited" } })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /requires slots/);
+});
+
+test("limited capacity with zero slots fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({ capacity: { type: "limited", slots: 0 } })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /integer between 1 and 100/);
+});
+
+test("limited capacity with negative slots fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({ capacity: { type: "limited", slots: -1 } })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+});
+
+test("limited capacity with fractional slots fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({ capacity: { type: "limited", slots: 1.5 } })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /integer between 1 and 100/);
+});
+
+test("limited capacity above 100 fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({ capacity: { type: "limited", slots: 101 } })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+});
+
+test("unlimited capacity containing slots fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        capacity: { type: "unlimited", slots: 5 },
+        interactions: [interaction({ availability: { type: "always" } })]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must not contain slots/);
+});
+
+test("extra field inside capacity fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({ capacity: { type: "limited", slots: 3, occupied: 1 } })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unknown capacity field "occupied"/);
+});
+
+test("capacity inside an interaction fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ capacity: { type: "limited", slots: 1 } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Capacity belongs to the object/);
+});
+
+test("limited object with always fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ availability: { type: "always" } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /limited object "sofa_01" must use availability "when_capacity_available"/);
+});
+
+test("unlimited object with when_capacity_available fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        capacity: { type: "unlimited" },
+        interactions: [
+          interaction({ availability: { type: "when_capacity_available" } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /unlimited object "sofa_01" must use availability "always"/);
+});
+
+test("limited object with when_capacity_available passes", () => {
+  const result = validateSmartObjectOutput(output(), needs);
+  assert.equal(result.valid, true);
+});
+
+test("unlimited object with always passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        id: "notice_board_01",
+        type: "notice_board",
+        capacity: { type: "unlimited" },
+        interactions: [
+          interaction({ id: "read_information", availability: { type: "always" } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("different objects may have different capacities", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object(),
+      object({
+        id: "radio_01",
+        type: "radio",
+        capacity: { type: "unlimited" },
+        interactions: [
+          interaction({ id: "listen_to_radio", availability: { type: "always" } })
         ]
       })
     ]
@@ -129,7 +348,7 @@ test("missing duration fails", () => {
         interactions: [
           {
             id: "sit_and_relax",
-            availability: { type: "always" },
+            availability: { type: "when_capacity_available" },
             advertisements: [{ need: "rest", weight: 0.5 }]
           }
         ]
@@ -296,7 +515,7 @@ test("missing interaction ID fails", () => {
         interactions: [
           {
             duration: { type: "continuous" },
-            availability: { type: "always" },
+            availability: { type: "when_capacity_available" },
             advertisements: [{ need: "rest", weight: 0.5 }]
           }
         ]
@@ -341,6 +560,7 @@ test("same interaction ID on different objects is allowed", () => {
       {
         id: "armchair_01",
         type: "armchair",
+        capacity: { type: "limited", slots: 1 },
         interactions: [
           interaction({ advertisements: [{ need: "rest", weight: 0.5 }] })
         ]
@@ -358,7 +578,7 @@ test("missing interaction advertisements fail", () => {
           {
             id: "sit_and_relax",
             duration: { type: "continuous" },
-            availability: { type: "always" }
+            availability: { type: "when_capacity_available" }
           }
         ]
       })
@@ -541,13 +761,13 @@ test("capacity inside availability fails", () => {
     objects: [
       object({
         interactions: [
-          interaction({ availability: { type: "always", capacity: 3 } })
+          interaction({ availability: { type: "when_capacity_available", capacity: 3 } })
         ]
       })
     ]
   }), needs);
   assert.equal(result.valid, false);
-  assert.match(result.errors.join(" "), /must not include "capacity"/);
+  assert.match(result.errors.join(" "), /Unknown availability field "capacity"/);
 });
 
 test("runtime field occupied fails", () => {
@@ -555,7 +775,7 @@ test("runtime field occupied fails", () => {
     objects: [
       object({
         interactions: [
-          interaction({ availability: { type: "when_free", occupied: false } })
+          interaction({ availability: { type: "when_capacity_available", occupied: false } })
         ]
       })
     ]
@@ -569,7 +789,7 @@ test("runtime field current_users fails", () => {
     objects: [
       object({
         interactions: [
-          interaction({ availability: { type: "when_free", current_users: [] } })
+          interaction({ availability: { type: "when_capacity_available", current_users: [] } })
         ]
       })
     ]
@@ -583,7 +803,7 @@ test("runtime field reserved_by fails", () => {
     objects: [
       object({
         interactions: [
-          interaction({ availability: { type: "when_free", reserved_by: "npc_01" } })
+          interaction({ availability: { type: "when_capacity_available", reserved_by: "npc_01" } })
         ]
       })
     ]
@@ -611,13 +831,13 @@ test("availability is required on every interaction", () => {
   assert.match(result.errors.join(" "), /Interaction "nap" of object "sofa_01" is missing availability/);
 });
 
-test("different interactions on one object may use different availability types", () => {
+test("multiple interactions on one object share the same object capacity structure", () => {
   const result = validateSmartObjectOutput(output({
     objects: [
       object({
         interactions: [
-          interaction({ id: "look_at_sofa", availability: { type: "always" } }),
-          interaction({ id: "sit_and_rest", availability: { type: "when_free" } })
+          interaction({ id: "sit_and_relax" }),
+          interaction({ id: "socialize_while_seated" })
         ]
       })
     ]
