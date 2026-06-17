@@ -29,7 +29,7 @@ export const smartObjectSchema = {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["id", "duration", "advertisements"],
+              required: ["id", "duration", "availability", "advertisements"],
               properties: {
                 id: {
                   type: "string",
@@ -48,6 +48,17 @@ export const smartObjectSchema = {
                       type: "number",
                       minimum: 0,
                       maximum: 86400
+                    }
+                  }
+                },
+                availability: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["type"],
+                  properties: {
+                    type: {
+                      type: "string",
+                      enum: ["always", "when_free"]
                     }
                   }
                 },

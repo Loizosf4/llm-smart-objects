@@ -6,6 +6,19 @@ const ajv = new Ajv({ allErrors: true });
 const validateSchema = ajv.compile(smartObjectSchema);
 const INTERACTION_ID_PATTERN = /^[a-z][a-z0-9_]*$/;
 const DURATION_TYPES = new Set(["instant", "fixed", "continuous"]);
+const AVAILABILITY_TYPES = new Set(["always", "when_free"]);
+const FORBIDDEN_AVAILABILITY_FIELDS = new Set([
+  "capacity",
+  "seat_count",
+  "seats",
+  "max_users",
+  "maximum_users",
+  "user_limit",
+  "available_slots",
+  "occupied",
+  "current_users",
+  "reserved_by"
+]);
 
 function formatAjvError(error) {
   const path = error.instancePath || "/";
@@ -44,6 +57,38 @@ function validateDuration(duration, objectId, interactionId, errors) {
 
   if (duration.type === "continuous" && Object.hasOwn(duration, "seconds")) {
     errors.push(`Continuous duration on interaction "${interactionId}" of object "${objectId}" must not contain seconds.`);
+  }
+}
+
+function validateAvailability(interaction, objectId, interactionId, errors) {
+  if (!Object.hasOwn(interaction, "availability")) {
+    errors.push(`Interaction "${interactionId}" of object "${objectId}" is missing availability.`);
+    return;
+  }
+
+  const { availability } = interaction;
+
+  if (!availability || typeof availability !== "object" || Array.isArray(availability)) {
+    errors.push(`Availability on interaction "${interactionId}" of object "${objectId}" must be an object.`);
+    return;
+  }
+
+  if (!Object.hasOwn(availability, "type")) {
+    errors.push(`Availability on interaction "${interactionId}" of object "${objectId}" is missing type.`);
+  } else if (!AVAILABILITY_TYPES.has(availability.type)) {
+    errors.push(`Unsupported availability type "${availability.type}" on interaction "${interactionId}" of object "${objectId}".`);
+  }
+
+  for (const field of Object.keys(availability)) {
+    if (field === "type") {
+      continue;
+    }
+
+    if (FORBIDDEN_AVAILABILITY_FIELDS.has(field)) {
+      errors.push(`Availability on interaction "${interactionId}" of object "${objectId}" must not include "${field}".`);
+    } else {
+      errors.push(`Unknown availability field "${field}" on interaction "${interactionId}" of object "${objectId}".`);
+    }
   }
 }
 
@@ -90,8 +135,12 @@ export function validateSmartObjectData(data, needs) {
         interactionIds.add(interaction.id);
       }
 
-      if (interaction && typeof interaction.duration?.type === "string" && DURATION_TYPES.has(interaction.duration.type)) {
-        validateDuration(interaction.duration, objectId, interactionId, errors);
+      if (interaction) {
+        if (typeof interaction.duration?.type === "string" && DURATION_TYPES.has(interaction.duration.type)) {
+          validateDuration(interaction.duration, objectId, interactionId, errors);
+        }
+
+        validateAvailability(interaction, objectId, interactionId, errors);
       }
 
       if (!interaction || !Array.isArray(interaction.advertisements)) {

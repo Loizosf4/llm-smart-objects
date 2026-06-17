@@ -41,7 +41,7 @@ test("Gemini request uses API key header and keeps key out of URL", async (t) =>
         candidates: [
           {
             content: {
-              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"interactions\":[{\"id\":\"sit_and_relax\",\"duration\":{\"type\":\"continuous\"},\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
+              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"interactions\":[{\"id\":\"sit_and_relax\",\"duration\":{\"type\":\"continuous\"},\"availability\":{\"type\":\"always\"},\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
             }
           }
         ]
@@ -70,7 +70,7 @@ test("Gemini request contains structured output config with need enum", async (t
         candidates: [
           {
             content: {
-              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"interactions\":[{\"id\":\"sit_and_relax\",\"duration\":{\"type\":\"continuous\"},\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
+              parts: [{ text: "{\"location\":\"break room\",\"objects\":[{\"id\":\"sofa_01\",\"type\":\"sofa\",\"interactions\":[{\"id\":\"sit_and_relax\",\"duration\":{\"type\":\"continuous\"},\"availability\":{\"type\":\"always\"},\"advertisements\":[{\"need\":\"rest\",\"weight\":0.6}]}]}]}" }]
             }
           }
         ]
@@ -89,6 +89,18 @@ test("Gemini request contains structured output config with need enum", async (t
       .properties.objects.items.properties.interactions.items
       .properties.duration.properties.type.enum,
     ["instant", "fixed", "continuous"]
+  );
+  assert.equal(
+    capturedBody.generationConfig.responseJsonSchema
+      .properties.objects.items.properties.interactions.items
+      .required.includes("availability"),
+    true
+  );
+  assert.deepEqual(
+    capturedBody.generationConfig.responseJsonSchema
+      .properties.objects.items.properties.interactions.items
+      .properties.availability.properties.type.enum,
+    ["always", "when_free"]
   );
   assert.deepEqual(
     capturedBody.generationConfig.responseJsonSchema

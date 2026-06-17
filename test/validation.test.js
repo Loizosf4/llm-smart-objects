@@ -12,6 +12,7 @@ function interaction(overrides = {}) {
   return {
     id: "sit_and_relax",
     duration: { type: "continuous" },
+    availability: { type: "always" },
     advertisements: [{ need: "rest", weight: 0.6 }],
     ...overrides
   };
@@ -36,6 +37,32 @@ function output(overrides = {}) {
 
 test("valid continuous duration passes", () => {
   const result = validateSmartObjectOutput(output(), needs);
+  assert.equal(result.valid, true);
+});
+
+test("valid always availability passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ availability: { type: "always" } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
+});
+
+test("valid when_free availability passes", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ availability: { type: "when_free" } })
+        ]
+      })
+    ]
+  }), needs);
   assert.equal(result.valid, true);
 });
 
@@ -79,6 +106,7 @@ test("missing duration fails", () => {
         interactions: [
           {
             id: "sit_and_relax",
+            availability: { type: "always" },
             advertisements: [{ need: "rest", weight: 0.5 }]
           }
         ]
@@ -245,6 +273,7 @@ test("missing interaction ID fails", () => {
         interactions: [
           {
             duration: { type: "continuous" },
+            availability: { type: "always" },
             advertisements: [{ need: "rest", weight: 0.5 }]
           }
         ]
@@ -305,7 +334,8 @@ test("missing interaction advertisements fail", () => {
         interactions: [
           {
             id: "sit_and_relax",
-            duration: { type: "continuous" }
+            duration: { type: "continuous" },
+            availability: { type: "always" }
           }
         ]
       })
@@ -401,12 +431,175 @@ test("extra fields on an interaction fail", () => {
     objects: [
       object({
         interactions: [
+          interaction({ mood: "relaxed" })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+});
+
+test("missing availability fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          {
+            id: "sit_and_relax",
+            duration: { type: "continuous" },
+            advertisements: [{ need: "rest", weight: 0.5 }]
+          }
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /missing availability/);
+});
+
+test("availability as a string fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
           interaction({ availability: "always" })
         ]
       })
     ]
   }), needs);
   assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must be an object/);
+});
+
+test("missing availability type fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ availability: {} })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /missing type/);
+});
+
+test("unknown availability type fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ availability: { type: "sometimes" } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unsupported availability type "sometimes"/);
+});
+
+test("extra availability field fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ availability: { type: "always", reason: "shared" } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Unknown availability field "reason"/);
+});
+
+test("capacity inside availability fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ availability: { type: "always", capacity: 3 } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must not include "capacity"/);
+});
+
+test("runtime field occupied fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ availability: { type: "when_free", occupied: false } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must not include "occupied"/);
+});
+
+test("runtime field current_users fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ availability: { type: "when_free", current_users: [] } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must not include "current_users"/);
+});
+
+test("runtime field reserved_by fails", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ availability: { type: "when_free", reserved_by: "npc_01" } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /must not include "reserved_by"/);
+});
+
+test("availability is required on every interaction", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction(),
+          {
+            id: "nap",
+            duration: { type: "continuous" },
+            advertisements: [{ need: "rest", weight: 0.7 }]
+          }
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(" "), /Interaction "nap" of object "sofa_01" is missing availability/);
+});
+
+test("different interactions on one object may use different availability types", () => {
+  const result = validateSmartObjectOutput(output({
+    objects: [
+      object({
+        interactions: [
+          interaction({ id: "look_at_sofa", availability: { type: "always" } }),
+          interaction({ id: "sit_and_rest", availability: { type: "when_free" } })
+        ]
+      })
+    ]
+  }), needs);
+  assert.equal(result.valid, true);
 });
 
 test("malformed JSON produces a controlled error", () => {

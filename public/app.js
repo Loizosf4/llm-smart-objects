@@ -114,7 +114,12 @@ function validateClientInput(locationDescription, needs) {
 function isCurrentInteractionOutput(data) {
   return Boolean(data?.objects?.every((object) => (
     Array.isArray(object.interactions)
-    && object.interactions.every((interaction) => interaction?.duration && typeof interaction.duration === "object")
+    && object.interactions.every((interaction) => (
+      interaction?.duration
+      && typeof interaction.duration === "object"
+      && interaction.availability
+      && typeof interaction.availability === "object"
+    ))
   )));
 }
 
@@ -187,7 +192,7 @@ function renderHistory() {
       if (isCurrentInteractionOutput(item.generatedJson)) {
         showJson(item.generatedJson);
       } else {
-        showJson(item.generatedJson, "Loaded historical JSON from an older schema; not validated against the current duration schema.");
+        showJson(item.generatedJson, "Loaded historical JSON from an older schema; not validated against the current availability schema.");
       }
       setError("");
       setStatus("Loaded a previous successful generation.");
@@ -273,7 +278,7 @@ downloadButton.addEventListener("click", () => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "smart-objects-with-duration.json";
+  link.download = "smart-objects-with-availability.json";
   link.click();
   URL.revokeObjectURL(url);
 });
